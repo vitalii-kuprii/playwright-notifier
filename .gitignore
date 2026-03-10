@@ -1,3 +1,21 @@
+# Task tracking (local only)
+.tasks/
+
+# Claude Code
+.claude/
+
+# Integration test examples (contain local config)
+examples/
+
+# Dev scripts
+scripts/
+
+# Playwright test results
+test-results/
+
+# Build output
+dist/
+
 # Logs
 logs
 *.log
