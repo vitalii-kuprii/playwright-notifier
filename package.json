@@ -1,6 +1,6 @@
 {
   "name": "playwright-notifier",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Playwright reporter — broadcast test results to Slack, Teams & Email",
   "keywords": [
     "playwright",

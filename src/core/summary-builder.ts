@@ -99,9 +99,6 @@ export class SummaryBuilder {
       } else if (this.config.showTriggeredBy === true) {
         triggeredBy = ci.actor;
       }
-      if (triggeredBy && !hasKey('Triggered by')) {
-        meta.push({ key: 'Triggered by', value: triggeredBy });
-      }
     }
 
     const reminders = this.config.showReminders
