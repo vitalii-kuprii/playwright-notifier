@@ -58,7 +58,7 @@ describe('buildSlackPayload', () => {
 
       const headerBlock = payload.attachments[0].blocks[0];
       expect(headerBlock.text?.text).toContain('✅ Pipeline passed');
-      expect(headerBlock.text?.text).toContain('<https://github.com/org/repo/actions/runs/11359|MyApp E2E #11359>');
+      expect(headerBlock.text?.text).toContain('<https://github.com/org/repo/actions/runs/11359|MyApp E2E>');
     });
 
     it('shows duration and view report link in header', () => {
@@ -584,6 +584,97 @@ describe('buildSlackPayload', () => {
 
   });
 
+  describe('triggered by', () => {
+    it('shows triggered by user in header', () => {
+      const summary = baseSummary({ triggeredBy: 'alice' });
+      const payload = buildSlackPayload(summary, defaultSlackConfig, defaultPluginConfig);
+
+      const headerBlock = payload.attachments[0].blocks[0];
+      expect(headerBlock.text?.text).toContain('(alice)');
+    });
+
+    it('shows mapped slack mention in header', () => {
+      const summary = baseSummary({ triggeredBy: '<@UD2GYJRO9>' });
+      const payload = buildSlackPayload(summary, defaultSlackConfig, defaultPluginConfig);
+
+      const headerBlock = payload.attachments[0].blocks[0];
+      expect(headerBlock.text?.text).toContain('(<@UD2GYJRO9>)');
+    });
+
+    it('does not show triggered by when not set', () => {
+      const summary = baseSummary({ triggeredBy: undefined });
+      const payload = buildSlackPayload(summary, defaultSlackConfig, defaultPluginConfig);
+
+      const headerBlock = payload.attachments[0].blocks[0];
+      // Should not have trailing parens for triggered by
+      expect(headerBlock.text?.text).not.toMatch(/\(.*\)/);
+    });
+  });
+
+  describe('PR/MR link', () => {
+    it('shows PR link in header for GitHub PRs with reordered words', () => {
+      const summary = baseSummary({
+        ci: {
+          provider: 'github',
+          branch: 'feature/login',
+          runId: '9876',
+          runUrl: 'https://github.com/org/repo/actions/runs/9876',
+          pullRequestNumber: '42',
+          pullRequestUrl: 'https://github.com/org/repo/pull/42',
+        },
+      });
+      const payload = buildSlackPayload(summary, defaultSlackConfig, defaultPluginConfig);
+
+      const headerBlock = payload.attachments[0].blocks[0];
+      // Word order: Pipeline <link> passed/failed for PR #42
+      expect(headerBlock.text?.text).toMatch(/Pipeline.*MyApp.*passed for.*PR #42/);
+    });
+
+    it('shows MR link for GitLab MRs', () => {
+      const summary = baseSummary({
+        ci: {
+          provider: 'gitlab',
+          branch: 'feature/login',
+          runId: '555',
+          runUrl: 'https://gitlab.com/org/repo/-/pipelines/555',
+          pullRequestNumber: '99',
+          pullRequestUrl: 'https://gitlab.com/org/repo/-/merge_requests/99',
+        },
+      });
+      const payload = buildSlackPayload(summary, defaultSlackConfig, defaultPluginConfig);
+
+      const headerBlock = payload.attachments[0].blocks[0];
+      expect(headerBlock.text?.text).toMatch(/Pipeline.*passed for.*MR !99/);
+    });
+
+    it('shows both PR link and triggered by in header', () => {
+      const summary = baseSummary({
+        triggeredBy: '<@U111>',
+        ci: {
+          provider: 'github',
+          branch: 'feature/login',
+          runId: '9876',
+          runUrl: 'https://github.com/org/repo/actions/runs/9876',
+          pullRequestNumber: '42',
+          pullRequestUrl: 'https://github.com/org/repo/pull/42',
+        },
+      });
+      const payload = buildSlackPayload(summary, defaultSlackConfig, defaultPluginConfig);
+
+      const headerBlock = payload.attachments[0].blocks[0];
+      // Pipeline <link> passed for PR #42 (<@U111>)
+      expect(headerBlock.text?.text).toMatch(/passed for.*PR #42.*\(<@U111>\)/);
+    });
+
+    it('does not show PR link when not in PR context', () => {
+      const summary = baseSummary();
+      const payload = buildSlackPayload(summary, defaultSlackConfig, defaultPluginConfig);
+
+      const headerBlock = payload.attachments[0].blocks[0];
+      expect(headerBlock.text?.text).not.toContain('for');
+    });
+  });
+
   describe('edge cases', () => {
     it('handles no CI context', () => {
       const summary = baseSummary({ ci: undefined });
@@ -593,8 +684,17 @@ describe('buildSlackPayload', () => {
       expect(headerBlock.text?.text).toContain('*MyApp E2E*');
     });
 
-    it('handles no report URL', () => {
+    it('falls back to artifacts URL when no report URL on GitHub', () => {
       const summary = baseSummary({ reportUrl: undefined });
+      const payload = buildSlackPayload(summary, defaultSlackConfig, defaultPluginConfig);
+
+      const headerBlock = payload.attachments[0].blocks[0];
+      expect(headerBlock.text?.text).toContain('View report');
+      expect(headerBlock.text?.text).toContain('actions/runs/11359#artifacts');
+    });
+
+    it('handles no report URL and no CI context', () => {
+      const summary = baseSummary({ reportUrl: undefined, ci: undefined });
       const payload = buildSlackPayload(summary, defaultSlackConfig, defaultPluginConfig);
 
       const headerBlock = payload.attachments[0].blocks[0];

@@ -91,15 +91,16 @@ export class SummaryBuilder {
       meta.push({ key: 'Branch', value: branch });
     }
 
-    if (ci) {
-      if (ci.runId && !hasKey('Run')) {
-        meta.push({ key: 'Run', value: `#${ci.runId}` });
+    let triggeredBy: string | undefined;
+    if (ci && ci.actor && this.config.showTriggeredBy !== false) {
+      if (typeof this.config.showTriggeredBy === 'object') {
+        // Mapping mode: look up CI actor in the mapping, fall back to raw actor
+        triggeredBy = this.config.showTriggeredBy[ci.actor] ?? ci.actor;
+      } else if (this.config.showTriggeredBy === true) {
+        triggeredBy = ci.actor;
       }
-      if (ci.actor && !hasKey('Triggered by')) {
-        meta.push({ key: 'Triggered by', value: ci.actor });
-      }
-      if (ci.pipelineName && !hasKey('Pipeline')) {
-        meta.push({ key: 'Pipeline', value: ci.pipelineName });
+      if (triggeredBy && !hasKey('Triggered by')) {
+        meta.push({ key: 'Triggered by', value: triggeredBy });
       }
     }
 
@@ -138,6 +139,7 @@ export class SummaryBuilder {
       flakyTests,
       skippedTests,
       passedTests,
+      triggeredBy,
       reminders,
       owners,
       onCall,

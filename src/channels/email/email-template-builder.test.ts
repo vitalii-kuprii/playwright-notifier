@@ -133,10 +133,9 @@ describe('buildEmailContent', () => {
       expect(html).toContain('reports.example.com');
     });
 
-    it('contains pipeline link with run ID', () => {
+    it('contains pipeline link', () => {
       const config = makePluginConfig();
       const { html } = buildEmailContent(baseSummary(), config);
-      expect(html).toContain('#11359');
       expect(html).toContain('github.com/org/repo/actions/runs/11359');
     });
 
@@ -303,6 +302,59 @@ describe('buildEmailContent', () => {
       const { html } = buildEmailContent(summary, config);
 
       expect(html).not.toContain('Reminders');
+    });
+  });
+
+  describe('triggered by', () => {
+    it('shows triggered by user in header', () => {
+      const summary = baseSummary({ triggeredBy: 'alice' });
+      const config = makePluginConfig();
+      const { html } = buildEmailContent(summary, config);
+      expect(html).toContain('(alice)');
+    });
+
+    it('does not show triggered by when not set', () => {
+      const summary = baseSummary({ triggeredBy: undefined });
+      const config = makePluginConfig();
+      const { html } = buildEmailContent(summary, config);
+      // Header should not have trailing triggered-by parens
+      const headerMatch = html.match(/<h2[^>]*>.*?<\/h2>/s);
+      expect(headerMatch?.[0]).not.toMatch(/\(.*\)/);
+    });
+  });
+
+  describe('PR/MR link', () => {
+    it('shows PR link in header for GitHub PRs', () => {
+      const summary = baseSummary({
+        ci: {
+          provider: 'github',
+          branch: 'feature/login',
+          runId: '9876',
+          runUrl: 'https://github.com/org/repo/actions/runs/9876',
+          pullRequestNumber: '42',
+          pullRequestUrl: 'https://github.com/org/repo/pull/42',
+        },
+      });
+      const config = makePluginConfig();
+      const { html } = buildEmailContent(summary, config);
+      expect(html).toContain('PR #42');
+      expect(html).toContain('href="https://github.com/org/repo/pull/42"');
+    });
+
+    it('shows MR link for GitLab MRs', () => {
+      const summary = baseSummary({
+        ci: {
+          provider: 'gitlab',
+          branch: 'feature/login',
+          runId: '555',
+          pullRequestNumber: '99',
+          pullRequestUrl: 'https://gitlab.com/org/repo/-/merge_requests/99',
+        },
+      });
+      const config = makePluginConfig();
+      const { html } = buildEmailContent(summary, config);
+      expect(html).toContain('MR !99');
+      expect(html).toContain('href="https://gitlab.com/org/repo/-/merge_requests/99"');
     });
   });
 

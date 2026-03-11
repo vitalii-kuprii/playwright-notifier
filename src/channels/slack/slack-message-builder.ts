@@ -45,7 +45,11 @@ export function buildSlackPayload(
   const color = isFailed ? '#e01e5a' : (isFlaky && pluginConfig.showFlaky) ? '#f2c744' : '#36a64f';
 
   const pipelineLink = buildPipelineLink(summary);
-  const headerText = `${statusEmoji} Pipeline ${statusText} ${pipelineLink}`;
+  const prLink = buildPRLink(summary);
+  const triggeredSuffix = summary.triggeredBy ? ` (${summary.triggeredBy})` : '';
+  const headerText = prLink
+    ? `${statusEmoji} Pipeline ${pipelineLink} ${statusText} for ${prLink}${triggeredSuffix}`
+    : `${statusEmoji} Pipeline ${statusText} ${pipelineLink}${triggeredSuffix}`;
 
   const blocks: SlackBlock[] = [];
 
@@ -105,7 +109,7 @@ export function buildSlackPayload(
   return {
     attachments: [{
       color,
-      fallback: `${statusEmoji} Pipeline ${statusText} ${summary.projectName}`,
+      fallback: `${statusEmoji} Pipeline ${statusText}${summary.projectName ? ` ${summary.projectName}` : ''}`,
       blocks,
     }],
   };
@@ -133,12 +137,33 @@ export function buildReminderThreadPayload(reminders: SkipReminder[]): SlackPayl
 
 function buildPipelineLink(summary: NormalizedSummary): string {
   const name = summary.projectName;
-  const runId = summary.ci?.runId ? ` #${summary.ci.runId}` : '';
 
-  if (summary.ci?.runUrl) {
-    return `<${summary.ci.runUrl}|${name}${runId}>`;
+  if (summary.ci?.runUrl && name) {
+    return `<${summary.ci.runUrl}|${name}>`;
   }
-  return `*${name}${runId}*`;
+  if (summary.ci?.runUrl) {
+    return `<${summary.ci.runUrl}|View run>`;
+  }
+  if (name) {
+    return `*${name}*`;
+  }
+  return '';
+}
+
+function buildPRLink(summary: NormalizedSummary): string | undefined {
+  const ci = summary.ci;
+  if (!ci?.pullRequestUrl || !ci.pullRequestNumber) return undefined;
+
+  const label = ci.provider === 'gitlab' ? `MR !${ci.pullRequestNumber}` : `PR #${ci.pullRequestNumber}`;
+  return `<${ci.pullRequestUrl}|${label}>`;
+}
+
+function resolveReportUrl(summary: NormalizedSummary): string | undefined {
+  if (summary.reportUrl) return summary.reportUrl;
+  if (summary.ci?.runUrl && summary.ci.provider === 'github') {
+    return `${summary.ci.runUrl}#artifacts`;
+  }
+  return summary.ci?.runUrl;
 }
 
 function buildContextLine(summary: NormalizedSummary): string {
@@ -146,8 +171,9 @@ function buildContextLine(summary: NormalizedSummary): string {
 
   parts.push(`*${formatDuration(summary.duration)}*`);
 
-  if (summary.reportUrl) {
-    parts.push(`*<${summary.reportUrl}|View report>*`);
+  const reportUrl = resolveReportUrl(summary);
+  if (reportUrl) {
+    parts.push(`*<${reportUrl}|View report>*`);
   }
 
   return parts.join('  |  ');
@@ -192,8 +218,9 @@ function buildFlakyBlock(summary: NormalizedSummary, config: PluginConfig): Slac
   const { flakyTests } = summary;
 
   if (flakyTests.length > config.maxFailures) {
-    const reportLink = summary.reportUrl
-      ? ` <${summary.reportUrl}|View report>`
+    const reportUrl = resolveReportUrl(summary);
+    const reportLink = reportUrl
+      ? ` <${reportUrl}|View report>`
       : '';
     return {
       type: 'section',
@@ -221,8 +248,9 @@ function buildFailedTestsBlock(
   const maxFailures = config.maxFailures;
 
   if (failedTests.length > maxFailures) {
-    const reportLink = summary.reportUrl
-      ? ` <${summary.reportUrl}|View report>`
+    const reportUrl = resolveReportUrl(summary);
+    const reportLink = reportUrl
+      ? ` <${reportUrl}|View report>`
       : '';
     return {
       type: 'section',

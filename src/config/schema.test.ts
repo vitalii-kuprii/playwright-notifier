@@ -5,7 +5,7 @@ describe('pluginConfigSchema', () => {
   it('applies defaults for minimal config', () => {
     const result = pluginConfigSchema.parse({});
     expect(result.sendResults).toBe('always');
-    expect(result.projectName).toBe('Playwright Tests');
+    expect(result.projectName).toBeUndefined();
     expect(result.environment).toBe('default');
     expect(result.channels).toEqual({});
     expect(result.meta).toEqual([]);
@@ -70,6 +70,32 @@ describe('pluginConfigSchema', () => {
   it('defaults branch to undefined', () => {
     const result = pluginConfigSchema.parse({});
     expect(result.branch).toBeUndefined();
+  });
+
+  it('defaults ciOnly to true', () => {
+    const result = pluginConfigSchema.parse({});
+    expect(result.ciOnly).toBe(true);
+  });
+
+  it('accepts ciOnly: false', () => {
+    const result = pluginConfigSchema.parse({ ciOnly: false });
+    expect(result.ciOnly).toBe(false);
+  });
+
+  it('accepts showTriggeredBy as true', () => {
+    const result = pluginConfigSchema.parse({ showTriggeredBy: true });
+    expect(result.showTriggeredBy).toBe(true);
+  });
+
+  it('accepts showTriggeredBy as a mapping object', () => {
+    const mapping = { alice: '<@U111>', bob: '<@U222>' };
+    const result = pluginConfigSchema.parse({ showTriggeredBy: mapping });
+    expect(result.showTriggeredBy).toEqual(mapping);
+  });
+
+  it('defaults showTriggeredBy to false', () => {
+    const result = pluginConfigSchema.parse({});
+    expect(result.showTriggeredBy).toBe(false);
   });
 
   it('rejects invalid sendResults value', () => {

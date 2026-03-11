@@ -72,10 +72,10 @@ describe('buildTeamsPayload', () => {
       expect(header.color).toBe('good');
     });
 
-    it('includes run ID in header', () => {
+    it('does not include run ID in header', () => {
       const payload = buildTeamsPayload(baseSummary(), defaultTeamsConfig, defaultPluginConfig);
       const header = payload.attachments[0].content.body[0];
-      expect(header.text).toContain('#11359');
+      expect(header.text).not.toContain('#11359');
     });
 
     it('shows duration', () => {
@@ -314,6 +314,56 @@ describe('buildTeamsPayload', () => {
       const allText = JSON.stringify(payload);
       expect(allText).toContain('Environment');
       expect(allText).toContain('staging');
+    });
+  });
+
+  describe('triggered by', () => {
+    it('shows triggered by user in header', () => {
+      const summary = baseSummary({ triggeredBy: 'alice' });
+      const payload = buildTeamsPayload(summary, defaultTeamsConfig, defaultPluginConfig);
+      const header = payload.attachments[0].content.body[0];
+      expect(header.text).toContain('(alice)');
+    });
+
+    it('does not show triggered by when not set', () => {
+      const summary = baseSummary({ triggeredBy: undefined });
+      const payload = buildTeamsPayload(summary, defaultTeamsConfig, defaultPluginConfig);
+      const header = payload.attachments[0].content.body[0];
+      expect(header.text).not.toMatch(/\(.*\)$/);
+    });
+  });
+
+  describe('PR/MR link', () => {
+    it('shows PR link in header with reordered words', () => {
+      const summary = baseSummary({
+        ci: {
+          provider: 'github',
+          branch: 'feature/login',
+          runId: '9876',
+          runUrl: 'https://github.com/org/repo/actions/runs/9876',
+          pullRequestNumber: '42',
+          pullRequestUrl: 'https://github.com/org/repo/pull/42',
+        },
+      });
+      const payload = buildTeamsPayload(summary, defaultTeamsConfig, defaultPluginConfig);
+      const header = payload.attachments[0].content.body[0];
+      // Word order: Pipeline MyApp passed for PR #42
+      expect(header.text).toMatch(/Pipeline MyApp E2E passed for.*PR #42/);
+    });
+
+    it('shows MR link for GitLab MRs', () => {
+      const summary = baseSummary({
+        ci: {
+          provider: 'gitlab',
+          branch: 'feature/login',
+          runId: '555',
+          pullRequestNumber: '99',
+          pullRequestUrl: 'https://gitlab.com/org/repo/-/merge_requests/99',
+        },
+      });
+      const payload = buildTeamsPayload(summary, defaultTeamsConfig, defaultPluginConfig);
+      const header = payload.attachments[0].content.body[0];
+      expect(header.text).toMatch(/Pipeline MyApp E2E passed for.*MR !99/);
     });
   });
 

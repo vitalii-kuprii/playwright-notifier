@@ -31,7 +31,7 @@ export function interpolateSubject(
   summary: NormalizedSummary,
 ): string {
   const vars: Record<string, string> = {
-    projectName: summary.projectName,
+    projectName: summary.projectName ?? '',
     status: summary.status,
     passed: String(summary.stats.passed),
     failed: String(summary.stats.failed),
@@ -54,18 +54,25 @@ function buildHtmlBody(summary: NormalizedSummary, pluginConfig: PluginConfig): 
   const sections: string[] = [];
 
   // Header
-  const pipelineName = summary.ci?.runId
-    ? `${summary.projectName} #${summary.ci.runId}`
-    : summary.projectName;
+  const pipelineName = summary.projectName ?? 'Pipeline';
 
   const pipelineLink = summary.ci?.runUrl
     ? `<a href="${esc(summary.ci.runUrl)}" style="color:${statusColor};text-decoration:none;">${esc(pipelineName)}</a>`
     : `<strong>${esc(pipelineName)}</strong>`;
 
+  const prLink = buildPRLink(summary);
+  const triggeredSuffix = summary.triggeredBy ? ` (${esc(summary.triggeredBy)})` : '';
+
+  // Main: "Pipeline failed MyApp"
+  // PR:   "Pipeline MyApp failed for PR #42"
+  const headerLine = prLink
+    ? `${statusEmoji} Pipeline ${pipelineLink} ${esc(statusText)} for ${prLink}${triggeredSuffix}`
+    : `${statusEmoji} Pipeline ${esc(statusText)} ${pipelineLink}${triggeredSuffix}`;
+
   sections.push(`
     <div style="border-left:4px solid ${statusColor};padding:12px 16px;margin-bottom:16px;">
       <h2 style="margin:0;font-size:18px;color:${statusColor};">
-        ${statusEmoji} Pipeline ${esc(statusText)} ${pipelineLink}
+        ${headerLine}
       </h2>
       <p style="margin:4px 0 0;color:#666;font-size:14px;">
         ${esc(formatDuration(summary.duration))}${summary.reportUrl ? ` | <a href="${esc(summary.reportUrl)}">View report</a>` : ''}
@@ -235,6 +242,14 @@ function buildRemindersSection(reminders: SkipReminder[], maxDisplay: number): s
       ${moreNote}
     </div>
   `;
+}
+
+function buildPRLink(summary: NormalizedSummary): string | undefined {
+  const ci = summary.ci;
+  if (!ci?.pullRequestUrl || !ci.pullRequestNumber) return undefined;
+
+  const label = ci.provider === 'gitlab' ? `MR !${ci.pullRequestNumber}` : `PR #${ci.pullRequestNumber}`;
+  return `<a href="${esc(ci.pullRequestUrl)}">${esc(label)}</a>`;
 }
 
 function esc(text: string): string {

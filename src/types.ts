@@ -18,7 +18,7 @@ export interface TestResult {
 }
 
 export interface NormalizedSummary {
-  projectName: string;
+  projectName?: string;
   environment: string;
   branch?: string;
   status: 'passed' | 'failed' | 'flaky';
@@ -42,6 +42,9 @@ export interface NormalizedSummary {
   passedTests: TestResult[];
 
   meta: MetaEntry[];
+
+  // Resolved triggered-by display string
+  triggeredBy?: string;
 
   // CI context (auto-detected or manual)
   ci?: CIContext;
@@ -91,4 +94,6 @@ export interface CIContext {
   runUrl?: string;
   actor?: string;
   pipelineName?: string;
+  pullRequestUrl?: string;
+  pullRequestNumber?: string;
 }

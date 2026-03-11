@@ -67,7 +67,8 @@ const rotationConfigSchema = z.object({
 
 export const pluginConfigSchema = z.object({
   sendResults: z.enum(['always', 'on-failure', 'off']).default('always'),
-  projectName: z.string().default('Playwright Tests'),
+  ciOnly: z.boolean().default(true),
+  projectName: z.string().optional(),
   environment: z.string().default('default'),
   branch: z.string().optional(),
 
@@ -86,6 +87,7 @@ export const pluginConfigSchema = z.object({
   showFlaky: z.boolean().default(false),
   mentionOnFlaky: z.boolean().default(false),
   showReminders: z.boolean().default(true),
+  showTriggeredBy: z.union([z.boolean(), z.record(z.string())]).default(false),
 
   // Report link (base URL to index.html)
   reportUrl: z.string().optional(),

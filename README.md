@@ -47,46 +47,40 @@ That's it. Run your tests and you'll get a Slack notification.
 
 All options are optional and have sensible defaults.
 
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `sendResults` | `'always'` \| `'on-failure'` \| `'off'` | `'always'` | When to send notifications |
+| `ciOnly` | `boolean` | `true` | Only send notifications in CI environments |
+| `projectName` | `string` | — | Display name for the project |
+| `environment` | `string` | `'default'` | Environment label (auto-detected from baseURL) |
+| `branch` | `string` | — | Override branch name (auto-detected in CI) |
+| `showFlaky` | `boolean` | `false` | Include flaky tests in the report |
+| `mentionOnFlaky` | `boolean` | `false` | Mention users when flaky tests are detected |
+| `showReminders` | `boolean` | `true` | Show skip reminder alerts |
+| `showTriggeredBy` | `boolean` \| `Record<string, string>` | `false` | Show who triggered the pipeline |
+| `reportUrl` | `string` | — | Link to the HTML report |
+| `maxFailures` | `number` | `5` | Max failed tests to list in the notification |
+| `maxErrorLength` | `number` | `300` | Max characters per error message |
+| `meta` | `{ key, value }[]` | `[]` | Extra key-value metadata to include |
+| `rotation` | `object` | — | On-call rotation config (see below) |
+
 ```ts
 ['playwright-notifier', {
-  // When to send: 'always' | 'on-failure' | 'off'
   sendResults: 'always',
-
-  // Project name shown in the notification header
+  ciOnly: true,
   projectName: 'My App E2E',
-
-  // Environment label: 'staging', 'production', etc.
-  // Set to 'default' to auto-detect from baseURL
   environment: 'staging',
-
-  // Link to the full HTML report
+  showTriggeredBy: true,
   reportUrl: 'https://your-report-url.com/run/123',
-
-  // Max failed tests to list before showing "too many failures"
   maxFailures: 5,
-
-  // Max characters per error message
   maxErrorLength: 300,
-
-  // Show flaky tests section
   showFlaky: true,
-
-  // Mention users on flaky tests (not just failures)
   mentionOnFlaky: false,
-
-  // Show @remind tag reminders for overdue skipped tests
   showReminders: true,
-
-  // Custom metadata shown in the notification
   meta: [
     { key: 'Branch', value: process.env.GITHUB_REF_NAME },
-    { key: 'Triggered by', value: process.env.GITHUB_ACTOR },
   ],
-
-  // Channel configs (see below)
   channels: { /* ... */ },
-
-  // On-call rotation (see below)
   rotation: { /* ... */ },
 }]
 ```
@@ -189,6 +183,49 @@ Subject supports template variables: `{{status}}`, `{{projectName}}`, `{{passed}
 | `smtp` | `object` | **required** | SMTP connection config |
 | `sendResults` | `'always' \| 'on-failure' \| 'off'` | — | Override global `sendResults` |
 
+## Triggered By
+
+Show who triggered the CI pipeline in notification headers.
+
+**Boolean mode** — uses the CI actor name as-is:
+
+```ts
+showTriggeredBy: true
+// Header: "Pipeline failed MyApp (alice)"
+```
+
+**User mapping mode** — maps CI usernames to channel-specific mentions:
+
+```ts
+showTriggeredBy: {
+  'alice': '<@U12345>',    // Slack user ID
+  'bob':   '<@U67890>',
+}
+// Header: "Pipeline failed MyApp (<@U12345>)"
+// Falls back to raw CI username if no mapping found
+```
+
+## PR/MR Detection
+
+Pull request and merge request context is auto-detected from CI environment variables. When a PR/MR is detected, the notification header changes format:
+
+| Context | Header format |
+|---------|--------------|
+| Main branch | `Pipeline failed MyApp (alice)` |
+| Pull request | `Pipeline MyApp failed for PR #42 (alice)` |
+
+Supported CI providers:
+
+- **GitHub Actions** — detects from `GITHUB_HEAD_REF` + `GITHUB_REF`
+- **GitLab CI** — detects from `CI_MERGE_REQUEST_IID`
+- **Azure DevOps** — detects from `BUILD_REASON`
+
+## CI-Only Mode
+
+By default, `ciOnly` is `true` — notifications are suppressed when running tests locally. The reporter detects CI via standard environment variables (`CI`, `GITHUB_ACTIONS`, `GITLAB_CI`, `TF_BUILD`).
+
+Set `ciOnly: false` to send notifications from local runs as well.
+
 ## Skip Reminders
 
 Tag skipped tests with `@remind(YYYY-MM-DD)` to get notified when they're overdue:
@@ -287,6 +324,31 @@ jobs:
       - run: npx playwright test
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+```
+
+## Beta Releases
+
+```bash
+# 1. Make sure you're logged in to npm
+npm whoami
+
+# 2. Build the package
+npm run build
+
+# 3. Bump version with beta prerelease tag (e.g. 0.1.1-beta.0)
+npm version prerelease --preid=beta
+
+# 4. Publish to npm with the "beta" dist-tag
+npm publish --tag beta
+
+# Or use the shortcut script:
+npm run release:beta
+```
+
+Install beta versions with:
+
+```bash
+npm i playwright-notifier@beta
 ```
 
 ## License

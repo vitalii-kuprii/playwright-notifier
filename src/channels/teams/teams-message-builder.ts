@@ -62,8 +62,20 @@ export function buildTeamsPayload(
   const body: CardElement[] = [];
 
   // Header
-  const headerParts = [`${statusEmoji} Pipeline ${statusText} — ${summary.projectName}`];
-  if (summary.ci?.runId) headerParts[0] += ` #${summary.ci.runId}`;
+  // Main: "❌ Pipeline failed — MyApp"
+  // PR:   "❌ Pipeline MyApp failed for PR #42"
+  const prLink = buildPRLink(summary);
+  const headerParts = prLink
+    ? [summary.projectName
+        ? `${statusEmoji} Pipeline ${summary.projectName} ${statusText} for ${prLink}`
+        : `${statusEmoji} Pipeline ${statusText} for ${prLink}`]
+    : [summary.projectName
+        ? `${statusEmoji} Pipeline ${statusText} — ${summary.projectName}`
+        : `${statusEmoji} Pipeline ${statusText}`];
+
+  if (summary.triggeredBy) {
+    headerParts.push(`(${summary.triggeredBy})`);
+  }
 
   // Rotation on-call overrides mentionOnFailure to avoid duplicate pings
   const shouldMention = isFailed || (isFlaky && pluginConfig.mentionOnFlaky);
@@ -150,6 +162,14 @@ export function buildTeamsPayload(
       content: card,
     }],
   };
+}
+
+function buildPRLink(summary: NormalizedSummary): string | undefined {
+  const ci = summary.ci;
+  if (!ci?.pullRequestUrl || !ci.pullRequestNumber) return undefined;
+
+  const label = ci.provider === 'gitlab' ? `MR !${ci.pullRequestNumber}` : `PR #${ci.pullRequestNumber}`;
+  return `[${label}](${ci.pullRequestUrl})`;
 }
 
 function buildStatsBlock(summary: NormalizedSummary): CardElement {
