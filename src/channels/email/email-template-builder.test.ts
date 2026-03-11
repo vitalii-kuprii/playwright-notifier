@@ -306,20 +306,22 @@ describe('buildEmailContent', () => {
   });
 
   describe('triggered by', () => {
-    it('shows triggered by user in header', () => {
+    it('shows triggered by user in meta table', () => {
       const summary = baseSummary({ triggeredBy: 'alice' });
       const config = makePluginConfig();
       const { html } = buildEmailContent(summary, config);
-      expect(html).toContain('(alice)');
+      expect(html).toContain('Triggered by');
+      expect(html).toContain('alice');
+      // Header should NOT contain triggered by
+      const headerMatch = html.match(/<h2[^>]*>.*?<\/h2>/s);
+      expect(headerMatch?.[0]).not.toContain('alice');
     });
 
     it('does not show triggered by when not set', () => {
       const summary = baseSummary({ triggeredBy: undefined });
       const config = makePluginConfig();
       const { html } = buildEmailContent(summary, config);
-      // Header should not have trailing triggered-by parens
-      const headerMatch = html.match(/<h2[^>]*>.*?<\/h2>/s);
-      expect(headerMatch?.[0]).not.toMatch(/\(.*\)/);
+      expect(html).not.toContain('Triggered by');
     });
   });
 

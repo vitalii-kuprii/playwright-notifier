@@ -62,20 +62,14 @@ export function buildTeamsPayload(
   const body: CardElement[] = [];
 
   // Header
-  // Main: "❌ Pipeline failed — MyApp"
-  // PR:   "❌ Pipeline MyApp failed for PR #42"
   const prLink = buildPRLink(summary);
-  const headerParts = prLink
-    ? [summary.projectName
-        ? `${statusEmoji} Pipeline ${summary.projectName} ${statusText} for ${prLink}`
-        : `${statusEmoji} Pipeline ${statusText} for ${prLink}`]
-    : [summary.projectName
-        ? `${statusEmoji} Pipeline ${statusText} — ${summary.projectName}`
-        : `${statusEmoji} Pipeline ${statusText}`];
+  const runLink = buildRunLink(summary);
+  const projectPrefix = summary.projectName ? `${summary.projectName} pipeline` : 'Pipeline';
 
-  if (summary.triggeredBy) {
-    headerParts.push(`(${summary.triggeredBy})`);
-  }
+  const headerLine = prLink
+    ? [statusEmoji, projectPrefix, runLink, statusText, 'for', prLink].filter(Boolean).join(' ')
+    : [statusEmoji, projectPrefix, statusText, runLink].filter(Boolean).join(' ');
+  const headerParts = [headerLine];
 
   // Rotation on-call overrides mentionOnFailure to avoid duplicate pings
   const shouldMention = isFailed || (isFlaky && pluginConfig.mentionOnFlaky);
@@ -164,6 +158,17 @@ export function buildTeamsPayload(
   };
 }
 
+function buildRunLink(summary: NormalizedSummary): string {
+  const runId = summary.ci?.runId;
+  if (runId && summary.ci?.runUrl) {
+    return `[#${runId}](${summary.ci.runUrl})`;
+  }
+  if (runId) {
+    return `#${runId}`;
+  }
+  return '';
+}
+
 function buildPRLink(summary: NormalizedSummary): string | undefined {
   const ci = summary.ci;
   if (!ci?.pullRequestUrl || !ci.pullRequestNumber) return undefined;
@@ -203,6 +208,10 @@ function buildMetaBlock(summary: NormalizedSummary): CardElement {
 
   if (summary.environment !== 'default') {
     facts.push({ title: 'Environment', value: summary.environment });
+  }
+
+  if (summary.triggeredBy) {
+    facts.push({ title: 'Triggered by', value: summary.triggeredBy });
   }
 
   return { type: 'FactSet', facts };

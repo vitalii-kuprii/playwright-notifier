@@ -72,10 +72,10 @@ describe('buildTeamsPayload', () => {
       expect(header.color).toBe('good');
     });
 
-    it('does not include run ID in header', () => {
+    it('includes run ID as link in header', () => {
       const payload = buildTeamsPayload(baseSummary(), defaultTeamsConfig, defaultPluginConfig);
       const header = payload.attachments[0].content.body[0];
-      expect(header.text).not.toContain('#11359');
+      expect(header.text).toContain('[#11359]');
     });
 
     it('shows duration', () => {
@@ -318,18 +318,22 @@ describe('buildTeamsPayload', () => {
   });
 
   describe('triggered by', () => {
-    it('shows triggered by user in header', () => {
+    it('shows triggered by user in meta block', () => {
       const summary = baseSummary({ triggeredBy: 'alice' });
       const payload = buildTeamsPayload(summary, defaultTeamsConfig, defaultPluginConfig);
+      const allText = JSON.stringify(payload);
+      expect(allText).toContain('"title":"Triggered by"');
+      expect(allText).toContain('"value":"alice"');
+      // Header should NOT contain triggered by
       const header = payload.attachments[0].content.body[0];
-      expect(header.text).toContain('(alice)');
+      expect(header.text).not.toContain('alice');
     });
 
     it('does not show triggered by when not set', () => {
       const summary = baseSummary({ triggeredBy: undefined });
       const payload = buildTeamsPayload(summary, defaultTeamsConfig, defaultPluginConfig);
-      const header = payload.attachments[0].content.body[0];
-      expect(header.text).not.toMatch(/\(.*\)$/);
+      const allText = JSON.stringify(payload);
+      expect(allText).not.toContain('Triggered by');
     });
   });
 
@@ -347,8 +351,8 @@ describe('buildTeamsPayload', () => {
       });
       const payload = buildTeamsPayload(summary, defaultTeamsConfig, defaultPluginConfig);
       const header = payload.attachments[0].content.body[0];
-      // Word order: Pipeline MyApp passed for PR #42
-      expect(header.text).toMatch(/Pipeline MyApp E2E passed for.*PR #42/);
+      // Word order: MyApp E2E pipeline #runId passed for PR #42
+      expect(header.text).toMatch(/MyApp E2E pipeline.*#9876.*passed for.*PR #42/);
     });
 
     it('shows MR link for GitLab MRs', () => {
@@ -363,7 +367,7 @@ describe('buildTeamsPayload', () => {
       });
       const payload = buildTeamsPayload(summary, defaultTeamsConfig, defaultPluginConfig);
       const header = payload.attachments[0].content.body[0];
-      expect(header.text).toMatch(/Pipeline MyApp E2E passed for.*MR !99/);
+      expect(header.text).toMatch(/MyApp E2E pipeline.*#555.*passed for.*MR !99/);
     });
   });
 
@@ -372,8 +376,9 @@ describe('buildTeamsPayload', () => {
       const summary = baseSummary({ ci: undefined });
       const payload = buildTeamsPayload(summary, defaultTeamsConfig, defaultPluginConfig);
 
-      expect(payload.attachments[0].content.body[0].text).toContain('MyApp E2E');
-      expect(payload.attachments[0].content.body[0].text).not.toContain('#');
+      expect(payload.attachments[0].content.body[0].text).toContain('MyApp E2E pipeline passed');
+      // No run link when no CI context
+      expect(payload.attachments[0].content.body[0].text).not.toContain('#11359');
     });
 
     it('handles no report URL', () => {

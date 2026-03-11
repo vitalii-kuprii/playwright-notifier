@@ -54,20 +54,16 @@ function buildHtmlBody(summary: NormalizedSummary, pluginConfig: PluginConfig): 
   const sections: string[] = [];
 
   // Header
-  const pipelineName = summary.projectName ?? 'Pipeline';
-
-  const pipelineLink = summary.ci?.runUrl
-    ? `<a href="${esc(summary.ci.runUrl)}" style="color:${statusColor};text-decoration:none;">${esc(pipelineName)}</a>`
-    : `<strong>${esc(pipelineName)}</strong>`;
+  const runLink = buildRunLink(summary, statusColor);
+  const projectPrefix = summary.projectName
+    ? `<strong>${esc(summary.projectName)}</strong> pipeline`
+    : 'Pipeline';
 
   const prLink = buildPRLink(summary);
-  const triggeredSuffix = summary.triggeredBy ? ` (${esc(summary.triggeredBy)})` : '';
 
-  // Main: "Pipeline failed MyApp"
-  // PR:   "Pipeline MyApp failed for PR #42"
   const headerLine = prLink
-    ? `${statusEmoji} Pipeline ${pipelineLink} ${esc(statusText)} for ${prLink}${triggeredSuffix}`
-    : `${statusEmoji} Pipeline ${esc(statusText)} ${pipelineLink}${triggeredSuffix}`;
+    ? [statusEmoji, projectPrefix, runLink, esc(statusText), 'for', prLink].filter(Boolean).join(' ')
+    : [statusEmoji, projectPrefix, esc(statusText), runLink].filter(Boolean).join(' ');
 
   sections.push(`
     <div style="border-left:4px solid ${statusColor};padding:12px 16px;margin-bottom:16px;">
@@ -153,6 +149,10 @@ function buildMetaTable(summary: NormalizedSummary): string {
   }
   if (summary.environment !== 'default') {
     rows.push(['Environment', summary.environment]);
+  }
+
+  if (summary.triggeredBy) {
+    rows.push(['Triggered by', summary.triggeredBy]);
   }
 
   return `
@@ -242,6 +242,17 @@ function buildRemindersSection(reminders: SkipReminder[], maxDisplay: number): s
       ${moreNote}
     </div>
   `;
+}
+
+function buildRunLink(summary: NormalizedSummary, statusColor: string): string {
+  const runId = summary.ci?.runId;
+  if (runId && summary.ci?.runUrl) {
+    return `<a href="${esc(summary.ci.runUrl)}" style="color:${statusColor};text-decoration:none;">#${esc(runId)}</a>`;
+  }
+  if (runId) {
+    return `#${esc(runId)}`;
+  }
+  return '';
 }
 
 function buildPRLink(summary: NormalizedSummary): string | undefined {

@@ -48,7 +48,7 @@ describe('buildSlackPayload', () => {
       const payload = buildSlackPayload(summary, defaultSlackConfig, defaultPluginConfig);
 
       expect(payload.attachments).toHaveLength(1);
-      expect(payload.attachments[0].fallback).toContain('✅ Pipeline passed MyApp E2E');
+      expect(payload.attachments[0].fallback).toContain('✅ MyApp E2E pipeline passed');
       expect(payload.attachments[0].color).toBe('#36a64f');
     });
 
@@ -57,8 +57,8 @@ describe('buildSlackPayload', () => {
       const payload = buildSlackPayload(summary, defaultSlackConfig, defaultPluginConfig);
 
       const headerBlock = payload.attachments[0].blocks[0];
-      expect(headerBlock.text?.text).toContain('✅ Pipeline passed');
-      expect(headerBlock.text?.text).toContain('<https://github.com/org/repo/actions/runs/11359|MyApp E2E>');
+      expect(headerBlock.text?.text).toContain('✅ MyApp E2E pipeline passed');
+      expect(headerBlock.text?.text).toContain('<https://github.com/org/repo/actions/runs/11359|#11359>');
     });
 
     it('shows duration and view report link in header', () => {
@@ -585,29 +585,34 @@ describe('buildSlackPayload', () => {
   });
 
   describe('triggered by', () => {
-    it('shows triggered by user in header', () => {
+    it('shows triggered by user in stats/meta grid', () => {
       const summary = baseSummary({ triggeredBy: 'alice' });
       const payload = buildSlackPayload(summary, defaultSlackConfig, defaultPluginConfig);
 
+      const statsBlock = payload.attachments[0].blocks[2]; // header, divider, stats+meta
+      const fieldTexts = statsBlock.fields?.map((f) => f.text) ?? [];
+      expect(fieldTexts).toContain('*Triggered by*\nalice');
+      // Header should NOT contain triggered by
       const headerBlock = payload.attachments[0].blocks[0];
-      expect(headerBlock.text?.text).toContain('(alice)');
+      expect(headerBlock.text?.text).not.toContain('alice');
     });
 
-    it('shows mapped slack mention in header', () => {
+    it('shows mapped slack mention in stats/meta grid', () => {
       const summary = baseSummary({ triggeredBy: '<@UD2GYJRO9>' });
       const payload = buildSlackPayload(summary, defaultSlackConfig, defaultPluginConfig);
 
-      const headerBlock = payload.attachments[0].blocks[0];
-      expect(headerBlock.text?.text).toContain('(<@UD2GYJRO9>)');
+      const statsBlock = payload.attachments[0].blocks[2];
+      const fieldTexts = statsBlock.fields?.map((f) => f.text) ?? [];
+      expect(fieldTexts).toContain('*Triggered by*\n<@UD2GYJRO9>');
     });
 
     it('does not show triggered by when not set', () => {
       const summary = baseSummary({ triggeredBy: undefined });
       const payload = buildSlackPayload(summary, defaultSlackConfig, defaultPluginConfig);
 
-      const headerBlock = payload.attachments[0].blocks[0];
-      // Should not have trailing parens for triggered by
-      expect(headerBlock.text?.text).not.toMatch(/\(.*\)/);
+      const statsBlock = payload.attachments[0].blocks[2];
+      const fieldTexts = statsBlock.fields?.map((f) => f.text) ?? [];
+      expect(fieldTexts.join('')).not.toContain('Triggered by');
     });
   });
 
@@ -626,8 +631,8 @@ describe('buildSlackPayload', () => {
       const payload = buildSlackPayload(summary, defaultSlackConfig, defaultPluginConfig);
 
       const headerBlock = payload.attachments[0].blocks[0];
-      // Word order: Pipeline <link> passed/failed for PR #42
-      expect(headerBlock.text?.text).toMatch(/Pipeline.*MyApp.*passed for.*PR #42/);
+      // Word order: MyApp E2E pipeline <runLink> passed for PR #42
+      expect(headerBlock.text?.text).toMatch(/MyApp E2E pipeline.*#9876.*passed for.*PR #42/);
     });
 
     it('shows MR link for GitLab MRs', () => {
@@ -644,10 +649,10 @@ describe('buildSlackPayload', () => {
       const payload = buildSlackPayload(summary, defaultSlackConfig, defaultPluginConfig);
 
       const headerBlock = payload.attachments[0].blocks[0];
-      expect(headerBlock.text?.text).toMatch(/Pipeline.*passed for.*MR !99/);
+      expect(headerBlock.text?.text).toMatch(/pipeline.*#555.*passed for.*MR !99/);
     });
 
-    it('shows both PR link and triggered by in header', () => {
+    it('shows PR link in header and triggered by in stats grid', () => {
       const summary = baseSummary({
         triggeredBy: '<@U111>',
         ci: {
@@ -662,8 +667,12 @@ describe('buildSlackPayload', () => {
       const payload = buildSlackPayload(summary, defaultSlackConfig, defaultPluginConfig);
 
       const headerBlock = payload.attachments[0].blocks[0];
-      // Pipeline <link> passed for PR #42 (<@U111>)
-      expect(headerBlock.text?.text).toMatch(/passed for.*PR #42.*\(<@U111>\)/);
+      expect(headerBlock.text?.text).toMatch(/pipeline.*#9876.*passed for.*PR #42/);
+      expect(headerBlock.text?.text).not.toContain('<@U111>');
+      // Triggered by should be in stats/meta grid
+      const statsBlock = payload.attachments[0].blocks[2];
+      const fieldTexts = statsBlock.fields?.map((f) => f.text) ?? [];
+      expect(fieldTexts).toContain('*Triggered by*\n<@U111>');
     });
 
     it('does not show PR link when not in PR context', () => {
@@ -681,7 +690,7 @@ describe('buildSlackPayload', () => {
       const payload = buildSlackPayload(summary, defaultSlackConfig, defaultPluginConfig);
 
       const headerBlock = payload.attachments[0].blocks[0];
-      expect(headerBlock.text?.text).toContain('*MyApp E2E*');
+      expect(headerBlock.text?.text).toContain('MyApp E2E pipeline passed');
     });
 
     it('falls back to artifacts URL when no report URL on GitHub', () => {

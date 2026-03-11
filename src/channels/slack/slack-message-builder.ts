@@ -44,12 +44,13 @@ export function buildSlackPayload(
   const statusText = isFailed ? 'failed' : 'passed';
   const color = isFailed ? '#e01e5a' : (isFlaky && pluginConfig.showFlaky) ? '#f2c744' : '#36a64f';
 
-  const pipelineLink = buildPipelineLink(summary);
+  const runLink = buildRunLink(summary);
   const prLink = buildPRLink(summary);
-  const triggeredSuffix = summary.triggeredBy ? ` (${summary.triggeredBy})` : '';
+  const projectPrefix = summary.projectName ? `${summary.projectName} pipeline` : 'Pipeline';
+
   const headerText = prLink
-    ? `${statusEmoji} Pipeline ${pipelineLink} ${statusText} for ${prLink}${triggeredSuffix}`
-    : `${statusEmoji} Pipeline ${statusText} ${pipelineLink}${triggeredSuffix}`;
+    ? [statusEmoji, projectPrefix, runLink, statusText, 'for', prLink].filter(Boolean).join(' ')
+    : [statusEmoji, projectPrefix, statusText, runLink].filter(Boolean).join(' ');
 
   const blocks: SlackBlock[] = [];
 
@@ -109,7 +110,7 @@ export function buildSlackPayload(
   return {
     attachments: [{
       color,
-      fallback: `${statusEmoji} Pipeline ${statusText}${summary.projectName ? ` ${summary.projectName}` : ''}`,
+      fallback: `${statusEmoji} ${summary.projectName ? `${summary.projectName} pipeline` : 'Pipeline'} ${statusText}`,
       blocks,
     }],
   };
@@ -135,17 +136,13 @@ export function buildReminderThreadPayload(reminders: SkipReminder[]): SlackPayl
   };
 }
 
-function buildPipelineLink(summary: NormalizedSummary): string {
-  const name = summary.projectName;
-
-  if (summary.ci?.runUrl && name) {
-    return `<${summary.ci.runUrl}|${name}>`;
+function buildRunLink(summary: NormalizedSummary): string {
+  const runId = summary.ci?.runId;
+  if (runId && summary.ci?.runUrl) {
+    return `<${summary.ci.runUrl}|#${runId}>`;
   }
-  if (summary.ci?.runUrl) {
-    return `<${summary.ci.runUrl}|View run>`;
-  }
-  if (name) {
-    return `*${name}*`;
+  if (runId) {
+    return `#${runId}`;
   }
   return '';
 }
@@ -209,6 +206,10 @@ function buildStatsAndMetaBlock(summary: NormalizedSummary): SlackBlock {
 
   if (summary.environment !== 'default') {
     fields.push(mrkdwn(`*Environment*\n${summary.environment}`));
+  }
+
+  if (summary.triggeredBy) {
+    fields.push(mrkdwn(`*Triggered by*\n${summary.triggeredBy}`));
   }
 
   return { type: 'section', fields };
