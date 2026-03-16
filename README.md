@@ -5,14 +5,35 @@ Designed for CI pipelines — add it to your Playwright config and get instant n
 
 ## Features
 
-- **Multi-channel** — send to Slack, Teams, Email, and Webhook simultaneously
+- **Multi-channel** — send to Slack, Teams and Email
 - **CI auto-detection** — picks up branch, commit, actor, and run URL from GitHub Actions, GitLab CI, and Azure DevOps
 - **Flaky test tracking** — highlights tests that passed only after retries
 - **Skip reminders** — tag skipped tests with `@remind(YYYY-MM-DD)` and get notified when they're overdue
 - **On-call rotation** — rotate who gets mentioned on failures (daily, weekly, or biweekly)
-- **Test ownership** — tag tests with `@owner(name)` to mention the responsible person on failure
 - **Environment detection** — auto-detects `staging`, `dev`, `production` from your base URL
 - **Configurable** — control what gets shown, how many failures to list, and who gets pinged
+
+## Screenshots
+
+### Slack
+
+| Passed | Reminders |
+|--------|-----------|
+| ![Slack Passed](docs/images/slack-passed.png) | ![Slack Reminders](docs/images/slack-reminders.png) |
+
+| Flaky | Failed |
+|-------|--------|
+| ![Slack Flaky](docs/images/slack-flaky.png) | ![Slack Failed](docs/images/slack-failed.png) |
+
+### Teams
+
+| Passed | Reminders |
+|--------|-----------|
+| ![Teams Passed](docs/images/teams-passed.png) | ![Teams Reminders](docs/images/teams-reminders.png) |
+
+| Flaky | Failed |
+|-------|--------|
+| ![Teams Flaky](docs/images/teams-flaky.png) | ![Teams Failed](docs/images/teams-failed.png) |
 
 ## Install
 
