@@ -548,31 +548,6 @@ jobs:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 ```
 
-## Beta Releases
-
-```bash
-# 1. Make sure you're logged in to npm
-npm whoami
-
-# 2. Build the package
-npm run build
-
-# 3. Bump version with beta prerelease tag (e.g. 0.1.1-beta.0)
-npm version prerelease --preid=beta
-
-# 4. Publish to npm with the "beta" dist-tag
-npm publish --tag beta
-
-# Or use the shortcut script:
-npm run release:beta
-```
-
-Install beta versions with:
-
-```bash
-npm i playwright-notifier@beta
-```
-
 ## License
 
 MIT
