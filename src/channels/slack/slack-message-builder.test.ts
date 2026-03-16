@@ -159,7 +159,7 @@ describe('buildSlackPayload', () => {
       expect(allText).toContain('*Failed*');
     });
 
-    it('lists failed test names as numbered list', () => {
+    it('lists failed test names with suitePath as numbered list (Issue 7)', () => {
       const summary = baseSummary({
         status: 'failed',
         stats: { passed: 48, failed: 2, skipped: 2, flaky: 0, total: 52 },
@@ -169,8 +169,8 @@ describe('buildSlackPayload', () => {
 
       const allText = JSON.stringify(payload);
       expect(allText).toContain('Failed test cases');
-      expect(allText).toContain('1. should redirect after login');
-      expect(allText).toContain('2. payment timeout handling');
+      expect(allText).toContain('1. Login > OAuth > should redirect after login');
+      expect(allText).toContain('2. Checkout > payment timeout handling');
     });
   });
 
@@ -206,7 +206,7 @@ describe('buildSlackPayload', () => {
   });
 
   describe('flaky tests', () => {
-    it('shows flaky section when showFlaky is true', () => {
+    it('shows flaky section with numbered list when flaky.show is true (Issue 13)', () => {
       const summary = baseSummary({
         status: 'flaky',
         stats: { passed: 50, failed: 0, skipped: 2, flaky: 1, total: 53 },
@@ -224,18 +224,20 @@ describe('buildSlackPayload', () => {
         }],
       });
 
-      const config = pluginConfigSchema.parse({ showFlaky: true });
+      const config = pluginConfigSchema.parse({ flaky: { show: true } });
       const payload = buildSlackPayload(summary, defaultSlackConfig, config);
 
       const allText = JSON.stringify(payload);
       expect(allText).toContain('Flaky tests (1)');
-      expect(allText).toContain('Search > Filters > date range filter');
+      expect(allText).toContain('1. Search > Filters > date range filter');
       expect(allText).toContain('retried 2x');
-      // showFlaky: true → yellow sidebar color
+      // Should NOT contain ⟳
+      expect(allText).not.toContain('⟳');
+      // flaky.show: true → yellow sidebar color
       expect(payload.attachments[0].color).toBe('#f2c744');
     });
 
-    it('hides flaky section when showFlaky is false', () => {
+    it('hides flaky section when flaky.show is false', () => {
       const summary = baseSummary({
         flakyTests: [{
           name: 'flaky test',
@@ -251,7 +253,7 @@ describe('buildSlackPayload', () => {
         }],
       });
 
-      const config = pluginConfigSchema.parse({ showFlaky: false });
+      const config = pluginConfigSchema.parse({ flaky: { show: false } });
       const payload = buildSlackPayload(summary, defaultSlackConfig, config);
 
       const allText = JSON.stringify(payload);
@@ -384,13 +386,13 @@ describe('buildSlackPayload', () => {
       expect(text).toContain('+3 more');
     });
 
-    it('hides reminders when showReminders is false', () => {
+    it('hides reminders when reminders.show is false', () => {
       const summary = baseSummary({
         reminders: [
           { testName: 'old test', file: 'test.spec.ts', remindDate: new Date('2026-03-01'), daysOverdue: 7 },
         ],
       });
-      const config = pluginConfigSchema.parse({ showReminders: false });
+      const config = pluginConfigSchema.parse({ reminders: { show: false } });
       const payload = buildSlackPayload(summary, defaultSlackConfig, config);
 
       const allText = JSON.stringify(payload);

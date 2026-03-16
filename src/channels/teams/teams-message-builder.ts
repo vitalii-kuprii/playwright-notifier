@@ -57,7 +57,7 @@ export function buildTeamsPayload(
 
   const statusEmoji = isFailed ? '❌' : '✅';
   const statusText = isFailed ? 'failed' : 'passed';
-  const statusColor = isFailed ? 'attention' : (isFlaky && pluginConfig.showFlaky) ? 'warning' : 'good';
+  const statusColor = isFailed ? 'attention' : (isFlaky && pluginConfig.flaky.show) ? 'warning' : 'good';
 
   const body: CardElement[] = [];
 
@@ -71,11 +71,14 @@ export function buildTeamsPayload(
     : [statusEmoji, projectPrefix, statusText, runLink].filter(Boolean).join(' ');
   const headerParts = [headerLine];
 
-  // Rotation on-call overrides mentionOnFailure to avoid duplicate pings
-  const shouldMention = isFailed || (isFlaky && pluginConfig.mentionOnFlaky);
-  if (shouldMention && summary.onCall && pluginConfig.rotation?.mentionInSummary !== false) {
+  // Issue 11: Only render mentions when webhookType === 'powerautomate'
+  // Standard webhooks can't resolve @mentions in Adaptive Cards
+  const canMention = teamsConfig.webhookType === 'powerautomate';
+  const shouldMention = isFailed || (isFlaky && pluginConfig.flaky.mention);
+
+  if (canMention && shouldMention && summary.onCall && pluginConfig.rotation?.mentionInSummary !== false) {
     headerParts.push(`(${summary.onCall.name})`);
-  } else if (shouldMention && teamsConfig.mentionOnFailure.length > 0) {
+  } else if (canMention && shouldMention && teamsConfig.mentionOnFailure.length > 0) {
     headerParts.push(`cc ${teamsConfig.mentionOnFailure.join(', ')}`);
   }
 
@@ -98,16 +101,24 @@ export function buildTeamsPayload(
     wrap: true,
   });
 
+  // Issue 6: Single reminder inline (after duration, before separator)
+  const showReminders = pluginConfig.reminders.show && summary.reminders?.length > 0;
+  if (showReminders && summary.reminders.length === 1) {
+    const r = summary.reminders[0];
+    const overdueText = r.daysOverdue === 0 ? 'due today' : `${r.daysOverdue}d overdue`;
+    body.push({
+      type: 'TextBlock',
+      text: `🔔 **1 reminder due** — ${r.testName} (${overdueText})`,
+      spacing: 'Small',
+      wrap: true,
+    });
+  }
+
   // Separator
   body.push({ type: 'TextBlock', text: '', separator: true });
 
-  // Stats
-  body.push(buildStatsBlock(summary));
-
-  // Meta
-  if (summary.meta.length > 0 || summary.environment !== 'default') {
-    body.push(buildMetaBlock(summary));
-  }
+  // Issue 2: Stats + Meta (ColumnSet grid replacing FactSet)
+  body.push(buildStatsAndMetaGrid(summary));
 
   // Failed tests
   if (isFailed && summary.failedTests.length > 0) {
@@ -116,24 +127,21 @@ export function buildTeamsPayload(
   }
 
   // Flaky section
-  if (pluginConfig.showFlaky && summary.flakyTests.length > 0) {
+  if (pluginConfig.flaky.show && summary.flakyTests.length > 0) {
     body.push({ type: 'TextBlock', text: '', separator: true });
     body.push(buildFlakyBlock(summary, pluginConfig));
   }
 
-  // Reminders
-  if (pluginConfig.showReminders && summary.reminders?.length > 0) {
+  // Issue 6: Multiple reminders at bottom
+  if (showReminders && summary.reminders.length >= 2) {
     body.push({ type: 'TextBlock', text: '', separator: true });
-    body.push(buildRemindersBlock(summary.reminders, pluginConfig.maxFailures));
+    body.push(buildRemindersBlock(summary.reminders, pluginConfig.display.maxFailures));
   }
 
-  // Report link action
+  // Issue 1: Only "View Report" action — removed redundant "View Pipeline" button
   const actions: CardAction[] = [];
   if (summary.reportUrl) {
     actions.push({ type: 'Action.OpenUrl', title: 'View Report', url: summary.reportUrl });
-  }
-  if (summary.ci?.runUrl) {
-    actions.push({ type: 'Action.OpenUrl', title: 'View Pipeline', url: summary.ci.runUrl });
   }
 
   const card: AdaptiveCard = {
@@ -177,68 +185,72 @@ function buildPRLink(summary: NormalizedSummary): string | undefined {
   return `[${label}](${ci.pullRequestUrl})`;
 }
 
-function buildStatsBlock(summary: NormalizedSummary): CardElement {
+// Issue 2: ColumnSet grid replacing two separate FactSets
+function buildStatsAndMetaGrid(summary: NormalizedSummary): CardElement {
   const { stats } = summary;
   const skippedNote = stats.skipped > 0 ? ` (${stats.skipped} skipped)` : '';
   const successCount = stats.passed + stats.flaky;
 
-  const facts = [
-    { title: 'Success', value: `${successCount} out of ${stats.total}${skippedNote}` },
+  const pairs: { label: string; value: string }[] = [
+    { label: 'Success', value: `${successCount} out of ${stats.total}${skippedNote}` },
   ];
 
   if (summary.status === 'failed' && stats.flaky > 0) {
-    facts.push({ title: 'Failed / Flaky', value: `${stats.failed} / ${stats.flaky}` });
+    pairs.push({ label: 'Failed / Flaky', value: `${stats.failed} / ${stats.flaky}` });
   } else if (summary.status === 'failed') {
-    facts.push({ title: 'Failed', value: `${stats.failed}` });
+    pairs.push({ label: 'Failed', value: `${stats.failed}` });
   } else if (stats.flaky > 0) {
-    facts.push({ title: 'Flaky', value: `${stats.flaky}` });
+    pairs.push({ label: 'Flaky', value: `${stats.flaky}` });
   }
-
-  return { type: 'FactSet', facts };
-}
-
-function buildMetaBlock(summary: NormalizedSummary): CardElement {
-  const facts: { title: string; value: string }[] = [];
 
   for (const entry of summary.meta) {
     if (entry.value) {
-      facts.push({ title: entry.key, value: entry.value });
+      pairs.push({ label: entry.key, value: entry.value });
     }
   }
 
   if (summary.environment !== 'default') {
-    facts.push({ title: 'Environment', value: summary.environment });
+    pairs.push({ label: 'Environment', value: summary.environment });
   }
 
   if (summary.triggeredBy) {
-    facts.push({ title: 'Triggered by', value: summary.triggeredBy });
+    pairs.push({ label: 'Triggered by', value: summary.triggeredBy });
   }
 
-  return { type: 'FactSet', facts };
+  // Build 2-column grid: each Column has bold label TextBlock + value TextBlock
+  const columns: CardColumn[] = pairs.map(p => ({
+    type: 'Column' as const,
+    width: 'auto',
+    items: [
+      { type: 'TextBlock', text: p.label, weight: 'Bolder', spacing: 'None' },
+      { type: 'TextBlock', text: p.value, spacing: 'None' },
+    ],
+  }));
+
+  return { type: 'ColumnSet', columns };
 }
 
 function buildFlakyBlock(summary: NormalizedSummary, config: PluginConfig): CardElement {
   const { flakyTests } = summary;
 
-  if (flakyTests.length > config.maxFailures) {
-    const reportLink = summary.reportUrl
-      ? ` [View report](${summary.reportUrl})`
-      : '';
-    return { type: 'TextBlock', text: `**⚠️ Flaky tests (${flakyTests.length})**\n\nToo many flaky tests to display here 🙄${reportLink}`, wrap: true };
+  // Issue 12: No "View report" link in flaky "too many" message for Teams
+  if (flakyTests.length > config.display.maxFailures) {
+    return { type: 'TextBlock', text: `**⚠️ Flaky tests (${flakyTests.length})**\n\nToo many flaky tests to display here 🙄`, wrap: true };
   }
 
+  // Issue 13: Numbered list instead of ⟳
   const lines = [`**⚠️ Flaky tests (${flakyTests.length})**`, ''];
-  for (const test of flakyTests) {
+  flakyTests.forEach((test, i) => {
     const suite = test.suitePath.length > 0 ? test.suitePath.join(' > ') + ' > ' : '';
-    lines.push(`⟳ ${suite}${test.name} _(retried ${test.retries}x)_`);
-  }
+    lines.push(`${i + 1}. ${suite}${test.name} _(retried ${test.retries}x)_`);
+  });
   return { type: 'TextBlock', text: lines.join('\n\n'), wrap: true };
 }
 
 function buildFailedTestsBlock(summary: NormalizedSummary, config: PluginConfig): CardElement {
   const { failedTests } = summary;
 
-  if (failedTests.length > config.maxFailures) {
+  if (failedTests.length > config.display.maxFailures) {
     const reportNote = summary.reportUrl ? ` [View report](${summary.reportUrl})` : '';
     return {
       type: 'TextBlock',
@@ -247,11 +259,13 @@ function buildFailedTestsBlock(summary: NormalizedSummary, config: PluginConfig)
     };
   }
 
+  // Issue 7: Show suitePath > testName for failed tests
   const lines = ['**Failed test cases:**', ''];
   failedTests.forEach((t, i) => {
     const ownerEntry = summary.owners?.find((o) => o.testName === t.name);
     const ownerSuffix = ownerEntry ? ` (${ownerEntry.owner.name})` : '';
-    lines.push(`${i + 1}. ${t.name}${ownerSuffix}`);
+    const fullName = [...t.suitePath, t.name].filter(Boolean).join(' > ');
+    lines.push(`${i + 1}. ${fullName}${ownerSuffix}`);
   });
 
   return { type: 'TextBlock', text: lines.join('\n\n'), wrap: true };

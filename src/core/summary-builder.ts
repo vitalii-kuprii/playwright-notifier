@@ -32,19 +32,20 @@ export class SummaryBuilder {
 
   addTestResult(test: TestCase, result: PwTestResult): void {
     const tags = extractTags(test.title);
+    const cleanName = stripTags(test.title);
     const suitePath = buildSuitePath(test.parent);
 
     this.tests.push({
-      name: test.title,
+      name: cleanName,
       suitePath,
-      fullTitle: [...suitePath, test.title].join(' > '),
+      fullTitle: [...suitePath, cleanName].join(' > '),
       file: test.location.file,
       line: test.location.line,
       status: mapStatus(test, result),
       duration: result.duration,
       error: truncateError(
         result.errors?.[0]?.message ?? result.errors?.[0]?.value?.toString(),
-        this.config.maxErrorLength,
+        this.config.display.maxErrorLength,
       ),
       tags,
       retries: result.retry,
@@ -91,17 +92,21 @@ export class SummaryBuilder {
       meta.push({ key: 'Branch', value: branch });
     }
 
+    // Issue 14: showTriggeredBy with onFailure support
     let triggeredBy: string | undefined;
     if (ci && ci.actor && this.config.showTriggeredBy !== false) {
       if (typeof this.config.showTriggeredBy === 'object') {
-        // Mapping mode: look up CI actor in the mapping, fall back to raw actor
-        triggeredBy = this.config.showTriggeredBy[ci.actor] ?? ci.actor;
+        const { users, onFailure } = this.config.showTriggeredBy;
+        // When onFailure is true, only show triggeredBy on failed pipelines
+        if (!onFailure || status === 'failed') {
+          triggeredBy = users[ci.actor] ?? ci.actor;
+        }
       } else if (this.config.showTriggeredBy === true) {
         triggeredBy = ci.actor;
       }
     }
 
-    const reminders = this.config.showReminders
+    const reminders = this.config.reminders.show
       ? extractDueReminders(skippedTests)
       : [];
 
@@ -142,7 +147,7 @@ export class SummaryBuilder {
       onCall,
       meta: meta.filter((m) => m.value !== undefined),
       ci,
-      reportUrl: this.config.reportUrl,
+      reportUrl: this.config.display.reportUrl,
     };
   }
 }
@@ -175,6 +180,11 @@ function buildSuitePath(suite: Suite): string[] {
 function extractTags(title: string): string[] {
   const tagPattern = /@[\w-]+(?:\([^)]*\))?/g;
   return title.match(tagPattern) ?? [];
+}
+
+/** Strip @tag and @tag(value) patterns from display text */
+function stripTags(title: string): string {
+  return title.replace(/@[\w-]+(?:\([^)]*\))?/g, '').replace(/\s+/g, ' ').trim();
 }
 
 function truncateError(error: string | undefined, maxLength: number): string | undefined {

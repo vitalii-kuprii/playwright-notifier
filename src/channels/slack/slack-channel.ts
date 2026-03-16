@@ -17,7 +17,7 @@ export class SlackChannel extends BaseChannel {
   async send(summary: NormalizedSummary): Promise<void> {
     const isThreadReminder = this.slackConfig.reminderPlacement === 'thread'
       && !this.slackConfig.webhookUrl
-      && this.pluginConfig.showReminders
+      && this.pluginConfig.reminders.show
       && summary.reminders?.length > 0;
 
     const payload = buildSlackPayload(

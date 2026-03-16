@@ -38,6 +38,10 @@ const defaultTeamsConfig = {
   webhookType: 'standard' as const,
   mentionOnFailure: [] as string[],
 };
+const powerAutomateTeamsConfig = {
+  ...defaultTeamsConfig,
+  webhookType: 'powerautomate' as const,
+};
 const defaultPluginConfig = pluginConfigSchema.parse({
   projectName: 'MyApp E2E',
   environment: 'staging',
@@ -84,11 +88,12 @@ describe('buildTeamsPayload', () => {
       expect(allText).toContain('2 minutes 34 seconds');
     });
 
-    it('shows stats as FactSet', () => {
+    it('shows stats as ColumnSet grid (Issue 2)', () => {
       const payload = buildTeamsPayload(baseSummary(), defaultTeamsConfig, defaultPluginConfig);
       const allText = JSON.stringify(payload);
       expect(allText).toContain('50 out of 52');
       expect(allText).toContain('2 skipped');
+      expect(allText).toContain('ColumnSet');
     });
 
     it('includes report link action', () => {
@@ -98,11 +103,10 @@ describe('buildTeamsPayload', () => {
       expect(allText).toContain('reports.example.com');
     });
 
-    it('includes pipeline link action', () => {
+    it('does NOT include View Pipeline button (Issue 1)', () => {
       const payload = buildTeamsPayload(baseSummary(), defaultTeamsConfig, defaultPluginConfig);
       const allText = JSON.stringify(payload);
-      expect(allText).toContain('View Pipeline');
-      expect(allText).toContain('github.com/org/repo/actions/runs/11359');
+      expect(allText).not.toContain('View Pipeline');
     });
   });
 
@@ -123,7 +127,7 @@ describe('buildTeamsPayload', () => {
       expect(header.color).toBe('attention');
     });
 
-    it('shows failed test cases', () => {
+    it('shows failed test cases with suitePath (Issue 7)', () => {
       const summary = baseSummary({
         status: 'failed',
         stats: { passed: 48, failed: 2, skipped: 2, flaky: 0, total: 52 },
@@ -137,15 +141,28 @@ describe('buildTeamsPayload', () => {
 
       expect(allText).toContain('Failed test cases');
       expect(allText).toContain('login test');
-      expect(allText).toContain('checkout test');
+      expect(allText).toContain('Cart > checkout test');
     });
 
-    it('shows mentions on failure', () => {
+    it('does NOT show mentions on failure for standard webhook (Issue 11)', () => {
       const summary = baseSummary({
         status: 'failed',
         stats: { passed: 48, failed: 2, skipped: 2, flaky: 0, total: 52 },
       });
       const config = { ...defaultTeamsConfig, mentionOnFailure: ['john@company.com'] };
+      const payload = buildTeamsPayload(summary, config, defaultPluginConfig);
+      const header = payload.attachments[0].content.body[0];
+
+      expect(header.text).not.toContain('john@company.com');
+      expect(header.text).not.toContain('cc');
+    });
+
+    it('shows mentions on failure for Power Automate webhook (Issue 11)', () => {
+      const summary = baseSummary({
+        status: 'failed',
+        stats: { passed: 48, failed: 2, skipped: 2, flaky: 0, total: 52 },
+      });
+      const config = { ...powerAutomateTeamsConfig, mentionOnFailure: ['john@company.com'] };
       const payload = buildTeamsPayload(summary, config, defaultPluginConfig);
       const header = payload.attachments[0].content.body[0];
 
@@ -201,11 +218,11 @@ describe('buildTeamsPayload', () => {
       expect(header.text).toContain('✅');
       expect(header.text).toContain('passed');
       expect(header.text).not.toContain('flaky');
-      // showFlaky defaults to false → green sidebar
+      // flaky.show defaults to false → green sidebar
       expect(header.color).toBe('good');
     });
 
-    it('shows flaky tests section when showFlaky is true', () => {
+    it('shows flaky tests section with numbered list when flaky.show is true (Issue 13)', () => {
       const summary = baseSummary({
         status: 'flaky',
         stats: { passed: 50, failed: 0, skipped: 2, flaky: 1, total: 52 },
@@ -213,48 +230,93 @@ describe('buildTeamsPayload', () => {
           { name: 'flaky test', suitePath: ['Suite'], fullTitle: 'Suite > flaky test', file: 'a.spec.ts', line: 1, status: 'flaky', duration: 500, tags: [], retries: 2 },
         ],
       });
-      const config = pluginConfigSchema.parse({ showFlaky: true });
+      const config = pluginConfigSchema.parse({ flaky: { show: true } });
       const payload = buildTeamsPayload(summary, defaultTeamsConfig, config);
       const allText = JSON.stringify(payload);
 
       expect(allText).toContain('Flaky tests');
-      expect(allText).toContain('Suite > flaky test');
+      expect(allText).toContain('1. Suite > flaky test');
       expect(allText).toContain('retried 2x');
+      // Should NOT contain ⟳
+      expect(allText).not.toContain('⟳');
+    });
+
+    it('flaky "too many" message has no View report link (Issue 12)', () => {
+      const flakyTests = Array.from({ length: 6 }, (_, i) => ({
+        name: `flaky ${i}`, suitePath: [] as string[], fullTitle: `flaky ${i}`, file: 'a.spec.ts', line: i, status: 'flaky' as const, duration: 100, tags: [] as string[], retries: 2,
+      }));
+      const summary = baseSummary({
+        status: 'flaky',
+        stats: { passed: 46, failed: 0, skipped: 0, flaky: 6, total: 52 },
+        flakyTests,
+      });
+      const config = pluginConfigSchema.parse({ flaky: { show: true } });
+      const payload = buildTeamsPayload(summary, defaultTeamsConfig, config);
+      const allText = JSON.stringify(payload);
+
+      expect(allText).toContain('Too many flaky tests');
+      expect(allText).toContain('🙄');
+      // Issue 12: The flaky "too many" TextBlock itself should NOT contain "View report"
+      // (the header and ActionSet still have report links — that's expected)
+      const flakyBlock = payload.attachments[0].content.body.find(
+        (b) => b.text?.includes('Too many flaky tests'),
+      );
+      expect(flakyBlock?.text).not.toContain('View report');
     });
   });
 
   describe('reminders', () => {
-    it('shows reminders section', () => {
+    it('shows single reminder inline after duration (Issue 6)', () => {
       const summary = baseSummary({
         reminders: [
           { testName: 'old test', file: 'a.spec.ts', remindDate: new Date('2026-03-01'), daysOverdue: 8 },
         ],
       });
-      const config = pluginConfigSchema.parse({ showReminders: true });
+      const config = pluginConfigSchema.parse({ reminders: { show: true } });
       const payload = buildTeamsPayload(summary, defaultTeamsConfig, config);
       const allText = JSON.stringify(payload);
 
-      expect(allText).toContain('Reminders (1)');
+      // Single reminder should be inline, not in bottom section
+      expect(allText).toContain('1 reminder due');
       expect(allText).toContain('old test');
-      expect(allText).toContain('Overdue 8 days');
+      expect(allText).toContain('8d overdue');
+      // Should NOT have the bottom "Reminders (1)" section
+      expect(allText).not.toContain('Reminders (1)');
     });
 
-    it('hides reminders when showReminders is false', () => {
+    it('shows multiple reminders as bottom section', () => {
+      const summary = baseSummary({
+        reminders: [
+          { testName: 'old test', file: 'a.spec.ts', remindDate: new Date('2026-03-01'), daysOverdue: 8 },
+          { testName: 'another test', file: 'b.spec.ts', remindDate: new Date('2026-03-05'), daysOverdue: 4 },
+        ],
+      });
+      const config = pluginConfigSchema.parse({ reminders: { show: true } });
+      const payload = buildTeamsPayload(summary, defaultTeamsConfig, config);
+      const allText = JSON.stringify(payload);
+
+      expect(allText).toContain('Reminders (2)');
+      expect(allText).toContain('old test');
+      expect(allText).toContain('another test');
+    });
+
+    it('hides reminders when reminders.show is false', () => {
       const summary = baseSummary({
         reminders: [
           { testName: 'old test', file: 'a.spec.ts', remindDate: new Date('2026-03-01'), daysOverdue: 8 },
         ],
       });
-      const config = pluginConfigSchema.parse({ showReminders: false });
+      const config = pluginConfigSchema.parse({ reminders: { show: false } });
       const payload = buildTeamsPayload(summary, defaultTeamsConfig, config);
       const allText = JSON.stringify(payload);
 
       expect(allText).not.toContain('Reminders');
+      expect(allText).not.toContain('reminder due');
     });
   });
 
   describe('on-call rotation', () => {
-    it('shows on-call in header on failure', () => {
+    it('shows on-call in header on failure for Power Automate webhook', () => {
       const summary = baseSummary({
         status: 'failed',
         stats: { passed: 48, failed: 2, skipped: 2, flaky: 0, total: 52 },
@@ -263,15 +325,16 @@ describe('buildTeamsPayload', () => {
       const config = pluginConfigSchema.parse({
         rotation: { startDate: '2026-01-01', members: [{ name: 'bob' }] },
       });
-      const payload = buildTeamsPayload(summary, defaultTeamsConfig, config);
+      const payload = buildTeamsPayload(summary, powerAutomateTeamsConfig, config);
       const header = payload.attachments[0].content.body[0];
 
       expect(header.text).toContain('(bob)');
-      expect(header.text).not.toContain('on-call');
     });
 
-    it('does not show on-call on passed pipeline', () => {
+    it('does NOT show on-call in header for standard webhook (Issue 11)', () => {
       const summary = baseSummary({
+        status: 'failed',
+        stats: { passed: 48, failed: 2, skipped: 2, flaky: 0, total: 52 },
         onCall: { name: 'bob', slack: '<@U222>', isOnCall: true },
       });
       const config = pluginConfigSchema.parse({
@@ -283,13 +346,26 @@ describe('buildTeamsPayload', () => {
       expect(header.text).not.toContain('bob');
     });
 
-    it('on-call overrides mentionOnFailure', () => {
+    it('does not show on-call on passed pipeline', () => {
+      const summary = baseSummary({
+        onCall: { name: 'bob', slack: '<@U222>', isOnCall: true },
+      });
+      const config = pluginConfigSchema.parse({
+        rotation: { startDate: '2026-01-01', members: [{ name: 'bob' }] },
+      });
+      const payload = buildTeamsPayload(summary, powerAutomateTeamsConfig, config);
+      const header = payload.attachments[0].content.body[0];
+
+      expect(header.text).not.toContain('bob');
+    });
+
+    it('on-call overrides mentionOnFailure for Power Automate', () => {
       const summary = baseSummary({
         status: 'failed',
         stats: { passed: 48, failed: 2, skipped: 2, flaky: 0, total: 52 },
         onCall: { name: 'bob', slack: '<@U222>', isOnCall: true },
       });
-      const teamsConfig = { ...defaultTeamsConfig, mentionOnFailure: ['john@company.com'] };
+      const teamsConfig = { ...powerAutomateTeamsConfig, mentionOnFailure: ['john@company.com'] };
       const config = pluginConfigSchema.parse({
         rotation: { startDate: '2026-01-01', members: [{ name: 'bob' }] },
       });
@@ -318,12 +394,12 @@ describe('buildTeamsPayload', () => {
   });
 
   describe('triggered by', () => {
-    it('shows triggered by user in meta block', () => {
+    it('shows triggered by user in stats grid', () => {
       const summary = baseSummary({ triggeredBy: 'alice' });
       const payload = buildTeamsPayload(summary, defaultTeamsConfig, defaultPluginConfig);
       const allText = JSON.stringify(payload);
-      expect(allText).toContain('"title":"Triggered by"');
-      expect(allText).toContain('"value":"alice"');
+      expect(allText).toContain('Triggered by');
+      expect(allText).toContain('alice');
       // Header should NOT contain triggered by
       const header = payload.attachments[0].content.body[0];
       expect(header.text).not.toContain('alice');

@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { pluginConfigSchema } from './schema';
 
 describe('pluginConfigSchema', () => {
@@ -9,6 +9,10 @@ describe('pluginConfigSchema', () => {
     expect(result.environment).toBe('default');
     expect(result.channels).toEqual({});
     expect(result.meta).toEqual([]);
+    expect(result.display).toEqual({ maxFailures: 5, maxErrorLength: 300 });
+    expect(result.flaky).toEqual({ show: false, mention: false });
+    expect(result.reminders).toEqual({ show: true });
+    expect(result.showTriggeredBy).toBe(false);
   });
 
   it('parses a full slack config', () => {
@@ -57,9 +61,62 @@ describe('pluginConfigSchema', () => {
     ).toThrow();
   });
 
-  it('defaults showReminders to true', () => {
+  // New nested config format
+  it('accepts new nested flaky config', () => {
+    const result = pluginConfigSchema.parse({ flaky: { show: true, mention: true } });
+    expect(result.flaky.show).toBe(true);
+    expect(result.flaky.mention).toBe(true);
+  });
+
+  it('accepts new nested display config', () => {
+    const result = pluginConfigSchema.parse({
+      display: { maxFailures: 10, maxErrorLength: 500, reportUrl: 'https://example.com/report' },
+    });
+    expect(result.display.maxFailures).toBe(10);
+    expect(result.display.maxErrorLength).toBe(500);
+    expect(result.display.reportUrl).toBe('https://example.com/report');
+  });
+
+  it('accepts new nested reminders config', () => {
+    const result = pluginConfigSchema.parse({ reminders: { show: false } });
+    expect(result.reminders.show).toBe(false);
+  });
+
+  it('defaults reminders.show to true', () => {
     const result = pluginConfigSchema.parse({});
-    expect(result.showReminders).toBe(true);
+    expect(result.reminders.show).toBe(true);
+  });
+
+  // Backward compat: deprecated flat keys still work
+  it('migrates deprecated showFlaky/mentionOnFlaky to flaky nested config', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const result = pluginConfigSchema.parse({ showFlaky: true, mentionOnFlaky: true });
+    expect(result.flaky.show).toBe(true);
+    expect(result.flaky.mention).toBe(true);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('showFlaky'));
+    warnSpy.mockRestore();
+  });
+
+  it('migrates deprecated showReminders to reminders nested config', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const result = pluginConfigSchema.parse({ showReminders: false });
+    expect(result.reminders.show).toBe(false);
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('showReminders'));
+    warnSpy.mockRestore();
+  });
+
+  it('migrates deprecated maxFailures/maxErrorLength/reportUrl to display', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const result = pluginConfigSchema.parse({
+      maxFailures: 10,
+      maxErrorLength: 500,
+      reportUrl: 'https://example.com/report',
+    });
+    expect(result.display.maxFailures).toBe(10);
+    expect(result.display.maxErrorLength).toBe(500);
+    expect(result.display.reportUrl).toBe('https://example.com/report');
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('maxFailures'));
+    warnSpy.mockRestore();
   });
 
   it('accepts optional branch override', () => {
@@ -87,10 +144,29 @@ describe('pluginConfigSchema', () => {
     expect(result.showTriggeredBy).toBe(true);
   });
 
-  it('accepts showTriggeredBy as a mapping object', () => {
+  it('accepts showTriggeredBy as new structured format with users and onFailure', () => {
+    const result = pluginConfigSchema.parse({
+      showTriggeredBy: {
+        users: { alice: '<@U111>', bob: '<@U222>' },
+        onFailure: true,
+      },
+    });
+    expect(result.showTriggeredBy).toEqual({
+      users: { alice: '<@U111>', bob: '<@U222>' },
+      onFailure: true,
+    });
+  });
+
+  it('migrates deprecated flat showTriggeredBy mapping to { users, onFailure }', () => {
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const mapping = { alice: '<@U111>', bob: '<@U222>' };
     const result = pluginConfigSchema.parse({ showTriggeredBy: mapping });
-    expect(result.showTriggeredBy).toEqual(mapping);
+    expect(result.showTriggeredBy).toEqual({
+      users: { alice: '<@U111>', bob: '<@U222>' },
+      onFailure: false,
+    });
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('flat'));
+    warnSpy.mockRestore();
   });
 
   it('defaults showTriggeredBy to false', () => {

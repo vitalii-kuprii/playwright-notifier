@@ -4,7 +4,7 @@ import { createMockTest, createFullResult } from './test-helpers';
 import type { PluginConfig } from '../config/schema';
 import { pluginConfigSchema } from '../config/schema';
 
-function createBuilder(overrides?: Partial<PluginConfig>): SummaryBuilder {
+function createBuilder(overrides?: Partial<PluginConfig> & Record<string, unknown>): SummaryBuilder {
   const config = pluginConfigSchema.parse(overrides ?? {});
   return new SummaryBuilder(config);
 }
@@ -126,7 +126,7 @@ describe('SummaryBuilder', () => {
   });
 
   it('truncates long error messages', () => {
-    const builder = createBuilder({ maxErrorLength: 50 });
+    const builder = createBuilder({ display: { maxErrorLength: 50 } });
     builder.onBegin();
 
     const longError = 'A'.repeat(200);
@@ -167,6 +167,26 @@ describe('SummaryBuilder', () => {
       '@smoke',
       '@remind(2026-04-01)',
     ]);
+  });
+
+  it('strips tags from test display name (Issue 3)', () => {
+    const builder = createBuilder();
+    builder.onBegin();
+
+    builder.addTestResult(
+      ...Object.values(
+        createMockTest({
+          title: 'login flow @auth @smoke @remind(2026-04-01)',
+        }),
+      ),
+    );
+
+    const summary = builder.build(createFullResult());
+
+    expect(summary.tests[0].name).toBe('login flow');
+    expect(summary.tests[0].fullTitle).toBe('login flow');
+    // Tags are still preserved in the tags array
+    expect(summary.tests[0].tags).toHaveLength(3);
   });
 
   it('builds suite path from describe hierarchy', () => {
@@ -257,7 +277,7 @@ describe('SummaryBuilder', () => {
 
   it('includes reportUrl when configured', () => {
     const builder = createBuilder({
-      reportUrl: 'https://reports.example.com/run-123/index.html',
+      display: { reportUrl: 'https://reports.example.com/run-123/index.html' },
     });
     builder.onBegin();
 
@@ -283,12 +303,13 @@ describe('SummaryBuilder', () => {
     const summary = builder.build(createFullResult());
 
     expect(summary.reminders).toHaveLength(1);
-    expect(summary.reminders[0].testName).toBe('old feature @remind(2025-01-01)');
+    // Issue 3+9: Tags stripped from display name in reminders
+    expect(summary.reminders[0].testName).toBe('old feature');
     expect(summary.reminders[0].daysOverdue).toBeGreaterThan(0);
   });
 
-  it('returns empty reminders when showReminders is false', () => {
-    const builder = createBuilder({ showReminders: false });
+  it('returns empty reminders when reminders.show is false', () => {
+    const builder = createBuilder({ reminders: { show: false } });
     builder.onBegin();
 
     builder.addTestResult(
@@ -345,7 +366,8 @@ describe('SummaryBuilder', () => {
     const summary = builder.build(createFullResult());
 
     expect(summary.owners).toHaveLength(1);
-    expect(summary.owners[0].testName).toBe('login flow @owner(alice)');
+    // Issue 3: Tags stripped from display name
+    expect(summary.owners[0].testName).toBe('login flow');
     expect(summary.owners[0].owner.name).toBe('alice');
   });
 

@@ -47,7 +47,7 @@ export function interpolateSubject(
 function buildHtmlBody(summary: NormalizedSummary, pluginConfig: PluginConfig): string {
   const isFailed = summary.status === 'failed';
   const isFlaky = summary.status === 'flaky';
-  const statusColor = (isFlaky && pluginConfig.showFlaky) ? COLORS.flaky : isFailed ? COLORS.failed : COLORS.passed;
+  const statusColor = (isFlaky && pluginConfig.flaky.show) ? COLORS.flaky : isFailed ? COLORS.failed : COLORS.passed;
   const statusEmoji = isFailed ? '❌' : '✅';
   const statusText = isFailed ? 'failed' : 'passed';
 
@@ -91,13 +91,13 @@ function buildHtmlBody(summary: NormalizedSummary, pluginConfig: PluginConfig): 
   }
 
   // Flaky
-  if (pluginConfig.showFlaky && summary.flakyTests.length > 0) {
+  if (pluginConfig.flaky.show && summary.flakyTests.length > 0) {
     sections.push(buildFlakySection(summary, pluginConfig));
   }
 
   // Reminders
-  if (pluginConfig.showReminders && summary.reminders?.length > 0) {
-    sections.push(buildRemindersSection(summary.reminders, pluginConfig.maxFailures));
+  if (pluginConfig.reminders.show && summary.reminders?.length > 0) {
+    sections.push(buildRemindersSection(summary.reminders, pluginConfig.display.maxFailures));
   }
 
   return `
@@ -170,7 +170,7 @@ function buildMetaTable(summary: NormalizedSummary): string {
 function buildFlakySection(summary: NormalizedSummary, config: PluginConfig): string {
   const { flakyTests } = summary;
 
-  if (flakyTests.length > config.maxFailures) {
+  if (flakyTests.length > config.display.maxFailures) {
     const reportLink = summary.reportUrl
       ? ` <a href="${esc(summary.reportUrl)}">View report</a>`
       : '';
@@ -198,7 +198,7 @@ function buildFlakySection(summary: NormalizedSummary, config: PluginConfig): st
 function buildFailedSection(summary: NormalizedSummary, config: PluginConfig): string {
   const { failedTests } = summary;
 
-  if (failedTests.length > config.maxFailures) {
+  if (failedTests.length > config.display.maxFailures) {
     const reportNote = summary.reportUrl
       ? ` <a href="${esc(summary.reportUrl)}">View report</a>`
       : '';
@@ -213,7 +213,8 @@ function buildFailedSection(summary: NormalizedSummary, config: PluginConfig): s
   const items = failedTests.map((t, i) => {
     const ownerEntry = summary.owners?.find((o) => o.testName === t.name);
     const ownerSuffix = ownerEntry ? ` (${esc(ownerEntry.owner.name)})` : '';
-    return `<li>${esc(t.name)}${ownerSuffix}</li>`;
+    const fullName = [...t.suitePath, t.name].filter(Boolean).join(' > ');
+    return `<li>${esc(fullName)}${ownerSuffix}</li>`;
   });
 
   return `

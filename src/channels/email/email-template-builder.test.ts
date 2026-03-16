@@ -235,14 +235,14 @@ describe('buildEmailContent', () => {
           { name: 'flaky test', suitePath: ['Suite'], fullTitle: 'Suite > flaky test', file: 'a.spec.ts', line: 1, status: 'flaky', duration: 500, tags: [], retries: 2 },
         ],
       });
-      const config = makePluginConfig({ showFlaky: true });
+      const config = makePluginConfig({ flaky: { show: true } });
       const { html } = buildEmailContent(summary, config);
 
       expect(html).toContain('#f2c744');
       expect(html).toContain('✅');
     });
 
-    it('uses green color when showFlaky is false', () => {
+    it('uses green color when flaky.show is false', () => {
       const summary = baseSummary({
         status: 'flaky',
         stats: { passed: 50, failed: 0, skipped: 2, flaky: 1, total: 52 },
@@ -265,7 +265,7 @@ describe('buildEmailContent', () => {
           { name: 'flaky test', suitePath: ['Suite'], fullTitle: 'Suite > flaky test', file: 'a.spec.ts', line: 1, status: 'flaky', duration: 500, tags: [], retries: 2 },
         ],
       });
-      const config = makePluginConfig({ showFlaky: true });
+      const config = makePluginConfig({ flaky: { show: true } });
       const { html } = buildEmailContent(summary, config);
 
       expect(html).toContain('Flaky tests');
@@ -296,7 +296,7 @@ describe('buildEmailContent', () => {
         ],
       });
       const config = pluginConfigSchema.parse({
-        showReminders: false,
+        reminders: { show: false },
         channels: { email: { to: ['team@example.com'], smtp: smtpFixture } },
       });
       const { html } = buildEmailContent(summary, config);

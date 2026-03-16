@@ -1,11 +1,11 @@
 # playwright-notifier
 
-Playwright reporter that sends test results to **Slack**, **Microsoft Teams**, and **Email**.
-Designed for CI pipelines — just add it to your Playwright config and get instant notifications when tests pass, fail, or flake.
+Playwright reporter that sends test results to **Slack**, **Microsoft Teams**, **Email**, and **Webhook**.
+Designed for CI pipelines — add it to your Playwright config and get instant notifications when tests pass, fail, or flake.
 
 ## Features
 
-- **Multi-channel** — send to Slack, Teams, and Email simultaneously
+- **Multi-channel** — send to Slack, Teams, Email, and Webhook simultaneously
 - **CI auto-detection** — picks up branch, commit, actor, and run URL from GitHub Actions, GitLab CI, and Azure DevOps
 - **Flaky test tracking** — highlights tests that passed only after retries
 - **Skip reminders** — tag skipped tests with `@remind(YYYY-MM-DD)` and get notified when they're overdue
@@ -43,9 +43,13 @@ export default defineConfig({
 
 That's it. Run your tests and you'll get a Slack notification.
 
+---
+
 ## Configuration
 
 All options are optional and have sensible defaults.
+
+### Core Options
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
@@ -54,15 +58,87 @@ All options are optional and have sensible defaults.
 | `projectName` | `string` | — | Display name for the project |
 | `environment` | `string` | `'default'` | Environment label (auto-detected from baseURL) |
 | `branch` | `string` | — | Override branch name (auto-detected in CI) |
-| `showFlaky` | `boolean` | `false` | Include flaky tests in the report |
-| `mentionOnFlaky` | `boolean` | `false` | Mention users when flaky tests are detected |
-| `showReminders` | `boolean` | `true` | Show skip reminder alerts |
-| `showTriggeredBy` | `boolean` \| `Record<string, string>` | `false` | Show who triggered the pipeline |
-| `reportUrl` | `string` | — | Link to the HTML report |
-| `maxFailures` | `number` | `5` | Max failed tests to list in the notification |
-| `maxErrorLength` | `number` | `300` | Max characters per error message |
 | `meta` | `{ key, value }[]` | `[]` | Extra key-value metadata to include |
-| `rotation` | `object` | — | On-call rotation config (see below) |
+
+### Display Options
+
+Controls how test results are rendered in notifications.
+
+```ts
+display: {
+  maxFailures: 5,       // Max failed/flaky tests to list before truncating
+  maxErrorLength: 300,  // Max characters per error message
+  reportUrl: 'https://your-report-url.com/run/123', // Link to the HTML report
+}
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `display.maxFailures` | `number` | `5` | Max failed/flaky tests to list in the notification |
+| `display.maxErrorLength` | `number` | `300` | Max characters per error message |
+| `display.reportUrl` | `string` | — | Link to the HTML report |
+
+### Flaky Test Config
+
+Controls whether flaky tests (passed after retries) are highlighted in notifications.
+
+```ts
+flaky: {
+  show: true,     // Include flaky tests section in the report
+  mention: false, // Mention users when flaky tests are detected
+}
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `flaky.show` | `boolean` | `false` | Include flaky tests in the report |
+| `flaky.mention` | `boolean` | `false` | Mention users when flaky tests are detected |
+
+### Reminders Config
+
+Controls skip reminder alerts for tests tagged with `@remind(YYYY-MM-DD)`.
+
+```ts
+reminders: {
+  show: true, // Show skip reminder alerts
+}
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `reminders.show` | `boolean` | `true` | Show skip reminder alerts |
+
+### Triggered By
+
+Show who triggered the CI pipeline. Supports three formats:
+
+**Simple boolean** — shows the raw CI actor name:
+```ts
+showTriggeredBy: true
+```
+
+**Structured format with user mapping** — maps CI usernames to channel-specific mentions:
+```ts
+showTriggeredBy: {
+  users: {
+    'alice': '<@U12345>',    // Slack user ID
+    'bob':   '<@U67890>',
+  },
+  onFailure: true, // Only show triggeredBy on failed pipelines (avoids pinging on green runs)
+}
+```
+
+When `onFailure: true`, the triggered-by field is only included when the pipeline status is `failed`. This is useful when `users` maps to Slack `<@U...>` IDs — it prevents pinging the person on every green pipeline.
+
+When `onFailure: false` (default), triggered-by is always shown regardless of status.
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `showTriggeredBy` | `boolean` \| `{ users, onFailure }` | `false` | Show who triggered the pipeline |
+| `showTriggeredBy.users` | `Record<string, string>` | — | Map CI usernames to display names/mentions |
+| `showTriggeredBy.onFailure` | `boolean` | `false` | Only show on failed pipelines |
+
+### Full Example
 
 ```ts
 ['playwright-notifier', {
@@ -70,26 +146,67 @@ All options are optional and have sensible defaults.
   ciOnly: true,
   projectName: 'My App E2E',
   environment: 'staging',
-  showTriggeredBy: true,
-  reportUrl: 'https://your-report-url.com/run/123',
-  maxFailures: 5,
-  maxErrorLength: 300,
-  showFlaky: true,
-  mentionOnFlaky: false,
-  showReminders: true,
+
+  display: {
+    maxFailures: 5,
+    maxErrorLength: 300,
+    reportUrl: 'https://your-report-url.com',
+  },
+
+  flaky: {
+    show: true,
+    mention: false,
+  },
+
+  reminders: {
+    show: true,
+  },
+
+  showTriggeredBy: {
+    users: {
+      'alice': '<@U12345>',
+      'bob': '<@U67890>',
+    },
+    onFailure: true,
+  },
+
   meta: [
-    { key: 'Branch', value: process.env.GITHUB_REF_NAME },
+    { key: 'Region', value: 'eu-west-1' },
   ],
+
   channels: { /* ... */ },
   rotation: { /* ... */ },
 }]
 ```
 
+### Backward Compatibility
+
+The following flat config keys are deprecated but still work. They will be automatically migrated to the nested format with a console warning:
+
+| Deprecated Key | Use Instead |
+|---|---|
+| `showFlaky` | `flaky: { show: true }` |
+| `mentionOnFlaky` | `flaky: { mention: true }` |
+| `showReminders` | `reminders: { show: true }` |
+| `maxFailures` | `display: { maxFailures: 5 }` |
+| `maxErrorLength` | `display: { maxErrorLength: 300 }` |
+| `reportUrl` | `display: { reportUrl: '...' }` |
+| `showTriggeredBy: { user: '<@U>' }` (flat mapping) | `showTriggeredBy: { users: { user: '<@U>' } }` |
+
+---
+
 ## Channels
 
 ### Slack
 
-Two modes: **Webhook** (simple) or **Bot Token** (supports threads).
+Two modes: **Webhook** (simple, one channel) or **Bot Token** (multiple channels, thread support).
+
+#### How to get a Slack Webhook URL
+
+1. Go to [api.slack.com/apps](https://api.slack.com/apps) and create a new app (or select an existing one)
+2. Navigate to **Incoming Webhooks** and activate them
+3. Click **Add New Webhook to Workspace** and select the channel
+4. Copy the webhook URL (starts with `https://hooks.slack.com/services/...`)
 
 #### Webhook mode
 
@@ -102,6 +219,15 @@ channels: {
 }
 ```
 
+#### How to get a Slack Bot Token
+
+1. Go to [api.slack.com/apps](https://api.slack.com/apps) and create a new app
+2. Navigate to **OAuth & Permissions**
+3. Add the `chat:write` bot scope
+4. Install the app to your workspace
+5. Copy the **Bot User OAuth Token** (starts with `xoxb-...`)
+6. Invite the bot to the channel(s) you want to post to: `/invite @your-bot`
+
 #### Bot Token mode
 
 Supports posting to multiple channels and reminder threads.
@@ -112,53 +238,112 @@ channels: {
     token: process.env.SLACK_BOT_TOKEN,
     channels: ['#qa-alerts', '#dev-notifications'],
     mentionOnFailure: ['<@U0123ABC>'],
-
-    // Where to show skip reminders: 'inline' (in main message) or 'thread'
-    reminderPlacement: 'thread',
+    reminderPlacement: 'thread', // or 'inline' (default)
   },
 }
 ```
 
+**Finding Slack User IDs for mentions:** In Slack, click on a user's profile, then click the three dots (...) menu and select "Copy member ID". The format is `<@U0123ABC>`.
+
+#### Slack Options
+
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `webhookUrl` | `string` | — | Slack Incoming Webhook URL |
-| `token` | `string` | — | Slack Bot User OAuth Token |
+| `token` | `string` | — | Slack Bot User OAuth Token (`xoxb-...`) |
 | `channels` | `string[]` | `[]` | Channels to post to (bot mode only) |
-| `mentionOnFailure` | `string[]` | `[]` | Users/groups to mention on failure |
-| `reminderPlacement` | `'inline' \| 'thread'` | `'inline'` | Where to show skip reminders |
-| `sendResults` | `'always' \| 'on-failure' \| 'off'` | — | Override global `sendResults` for this channel |
+| `mentionOnFailure` | `string[]` | `[]` | Users/groups to mention on failure (`<@U...>` format) |
+| `reminderPlacement` | `'inline'` \| `'thread'` | `'inline'` | Where to show skip reminders (bot mode only) |
+| `sendResults` | `'always'` \| `'on-failure'` \| `'off'` | — | Override global `sendResults` for this channel |
+
+> **Note:** Either `webhookUrl` OR both `token` + `channels` are required.
+
+---
 
 ### Microsoft Teams
+
+Sends Adaptive Card messages to a Teams channel via webhook.
+
+#### Webhook Types
+
+Teams supports two webhook types with different capabilities:
+
+| Feature | Standard Webhook | Power Automate Workflow |
+|---------|-----------------|----------------------|
+| Setup complexity | Simple | Moderate |
+| @mentions in cards | **Not supported** | Supported |
+| Adaptive Card support | Yes | Yes |
+| Authentication | Webhook URL only | Workflow URL |
+
+**Important:** Standard webhooks (Incoming Webhook connector) **cannot resolve @mentions** in Adaptive Cards. If you need `mentionOnFailure` or on-call rotation mentions to work in Teams, you must use a Power Automate workflow webhook.
+
+#### How to set up a Standard Webhook (simple, no mentions)
+
+1. In your Teams channel, click the three dots (...) menu and select **Connectors** (or **Manage channel** > **Connectors**)
+2. Search for **Incoming Webhook** and click **Configure**
+3. Name it (e.g., "E2E Test Results") and optionally upload an icon
+4. Click **Create** and copy the webhook URL
 
 ```ts
 channels: {
   teams: {
     webhookUrl: process.env.TEAMS_WEBHOOK_URL,
-    mentionOnFailure: ['user@company.com'],
+    // webhookType defaults to 'standard'
+    // mentionOnFailure will be IGNORED for standard webhooks
   },
 }
 ```
 
+#### How to set up a Power Automate Webhook (supports @mentions)
+
+1. Go to [flow.microsoft.com](https://flow.microsoft.com) (Power Automate)
+2. Create a new **Instant flow** triggered by **When a HTTP request is received**
+3. Add an action: **Post adaptive card in a chat or channel**
+4. Configure the action to post to your desired Teams channel
+5. Save the flow and copy the HTTP POST URL
+
+```ts
+channels: {
+  teams: {
+    webhookUrl: process.env.TEAMS_POWERAUTOMATE_URL,
+    webhookType: 'powerautomate',
+    mentionOnFailure: ['user@company.com'], // Works with Power Automate!
+  },
+}
+```
+
+#### Teams Options
+
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `webhookUrl` | `string` | **required** | Teams Incoming Webhook URL |
-| `webhookType` | `'standard' \| 'powerautomate'` | `'standard'` | Webhook connector type |
-| `mentionOnFailure` | `string[]` | `[]` | Users to mention on failure |
-| `sendResults` | `'always' \| 'on-failure' \| 'off'` | — | Override global `sendResults` |
+| `webhookUrl` | `string` | **required** | Teams webhook URL |
+| `webhookType` | `'standard'` \| `'powerautomate'` | `'standard'` | Webhook connector type |
+| `mentionOnFailure` | `string[]` | `[]` | Users to mention on failure (**Power Automate only**) |
+| `sendResults` | `'always'` \| `'on-failure'` \| `'off'` | — | Override global `sendResults` |
+
+---
 
 ### Email
 
-Requires the `nodemailer` package:
+Sends HTML emails via SMTP. Requires the `nodemailer` package:
 
 ```bash
 npm install nodemailer --save-dev
 ```
 
+#### How to set up Email notifications
+
+You need an SMTP server. Common options:
+- **Gmail:** `smtp.gmail.com:587` (requires [App Password](https://support.google.com/accounts/answer/185833))
+- **Outlook/Office 365:** `smtp.office365.com:587`
+- **AWS SES:** Your SES SMTP endpoint
+- **Self-hosted:** Your company's SMTP server
+
 ```ts
 channels: {
   email: {
     to: ['team@company.com', 'qa@company.com'],
-    from: 'ci@company.com',
+    from: 'ci@company.com', // Defaults to SMTP user if omitted
     subject: '[{{status}}] {{projectName}} — {{passed}}/{{total}} passed',
     smtp: {
       host: 'smtp.company.com',
@@ -173,7 +358,9 @@ channels: {
 }
 ```
 
-Subject supports template variables: `{{status}}`, `{{projectName}}`, `{{passed}}`, `{{total}}`.
+Subject supports template variables: `{{status}}`, `{{projectName}}`, `{{passed}}`, `{{failed}}`, `{{skipped}}`, `{{flaky}}`, `{{total}}`, `{{environment}}`.
+
+#### Email Options
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
@@ -181,29 +368,36 @@ Subject supports template variables: `{{status}}`, `{{projectName}}`, `{{passed}
 | `from` | `string` | SMTP user | Sender email address |
 | `subject` | `string` | `'[{{status}}] {{projectName}} — {{passed}}/{{total}} passed'` | Email subject template |
 | `smtp` | `object` | **required** | SMTP connection config |
-| `sendResults` | `'always' \| 'on-failure' \| 'off'` | — | Override global `sendResults` |
+| `smtp.host` | `string` | **required** | SMTP server hostname |
+| `smtp.port` | `number` | `587` | SMTP port |
+| `smtp.secure` | `boolean` | `false` | Use TLS |
+| `smtp.auth` | `{ user, pass }` | **required** | SMTP credentials |
+| `sendResults` | `'always'` \| `'on-failure'` \| `'off'` | — | Override global `sendResults` |
 
-## Triggered By
+---
 
-Show who triggered the CI pipeline in notification headers.
+### Webhook (Generic)
 
-**Boolean mode** — uses the CI actor name as-is:
-
-```ts
-showTriggeredBy: true
-// Header: "Pipeline failed MyApp (alice)"
-```
-
-**User mapping mode** — maps CI usernames to channel-specific mentions:
+Sends the full `NormalizedSummary` JSON to any HTTP endpoint. Useful for custom integrations, dashboards, or services like Discord bots, PagerDuty, etc.
 
 ```ts
-showTriggeredBy: {
-  'alice': '<@U12345>',    // Slack user ID
-  'bob':   '<@U67890>',
+channels: {
+  webhook: {
+    url: 'https://your-api.com/test-results',
+    headers: { Authorization: 'Bearer token123' },
+    method: 'POST', // or 'PUT'
+  },
 }
-// Header: "Pipeline failed MyApp (<@U12345>)"
-// Falls back to raw CI username if no mapping found
 ```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `url` | `string` | **required** | Webhook endpoint URL |
+| `headers` | `Record<string, string>` | `{}` | Custom HTTP headers |
+| `method` | `'POST'` \| `'PUT'` | `'POST'` | HTTP method |
+| `sendResults` | `'always'` \| `'on-failure'` \| `'off'` | — | Override global `sendResults` |
+
+---
 
 ## PR/MR Detection
 
@@ -236,7 +430,10 @@ test.skip('broken feature @remind(2025-06-01)', async ({ page }) => {
 });
 ```
 
-When the date passes, the notification will include a reminder section showing overdue tests and how many days late they are. This helps prevent skipped tests from being forgotten.
+When the date passes, the notification includes a reminder section showing overdue tests and how many days late they are. Tags are automatically stripped from display names — the notification shows clean test names.
+
+- **Single reminder** — shown inline under the duration line
+- **Multiple reminders** — shown as a numbered list at the bottom of the notification
 
 ## Test Ownership
 
@@ -247,6 +444,8 @@ test('checkout flow @owner(alice)', async ({ page }) => {
   // If this test fails, alice will be mentioned in the notification
 });
 ```
+
+Tags like `@owner(alice)` are stripped from display names. The notification shows `checkout flow (alice)` not `checkout flow @owner(alice)`.
 
 When the owner name matches a member in the rotation config, their Slack/email info is used for mentions.
 
@@ -276,6 +475,8 @@ rotation: {
 ```
 
 The rotation cycles through members based on the schedule. When rotation is active, the on-call person is mentioned instead of the `mentionOnFailure` list.
+
+> **Teams note:** On-call mentions are only rendered for Power Automate webhooks. Standard webhooks cannot resolve @mentions — see [Teams section](#microsoft-teams) above.
 
 ## CI Auto-Detection
 

@@ -1,5 +1,3 @@
-console.log('[playwright-notify] v2 loaded');
-
 import type { NormalizedSummary, TestResult, SkipReminder, OwnershipEntry } from '../../types';
 import type { PluginConfig, SlackChannelConfig } from '../../config/schema';
 
@@ -42,7 +40,7 @@ export function buildSlackPayload(
 
   const statusEmoji = isFailed ? '❌' : '✅';
   const statusText = isFailed ? 'failed' : 'passed';
-  const color = isFailed ? '#e01e5a' : (isFlaky && pluginConfig.showFlaky) ? '#f2c744' : '#36a64f';
+  const color = isFailed ? '#e01e5a' : (isFlaky && pluginConfig.flaky.show) ? '#f2c744' : '#36a64f';
 
   const runLink = buildRunLink(summary);
   const prLink = buildPRLink(summary);
@@ -56,7 +54,7 @@ export function buildSlackPayload(
 
   // Header + context combined (with mentions inline on failure/flaky)
   // Rotation on-call overrides mentionOnFailure to avoid duplicate pings
-  const shouldMention = isFailed || (isFlaky && pluginConfig.mentionOnFlaky);
+  const shouldMention = isFailed || (isFlaky && pluginConfig.flaky.mention);
   const hasOnCall = shouldMention && summary.onCall && pluginConfig.rotation?.mentionInSummary !== false;
   const mentionSuffix = hasOnCall
     ? ` (${summary.onCall!.slack ?? summary.onCall!.name})`
@@ -74,7 +72,7 @@ export function buildSlackPayload(
   });
 
   // Single reminder: context block after header, before divider
-  const showReminders = pluginConfig.showReminders
+  const showReminders = pluginConfig.reminders.show
     && !options?.excludeReminders
     && summary.reminders?.length > 0;
 
@@ -98,13 +96,13 @@ export function buildSlackPayload(
   }
 
   // Flaky section (if enabled and present)
-  if (pluginConfig.showFlaky && summary.flakyTests.length > 0) {
+  if (pluginConfig.flaky.show && summary.flakyTests.length > 0) {
     blocks.push(buildFlakyBlock(summary, pluginConfig));
   }
 
   // Multiple reminders: section block at bottom
   if (showReminders && summary.reminders.length >= 2) {
-    blocks.push(buildReminderSection(summary.reminders, pluginConfig.maxFailures));
+    blocks.push(buildReminderSection(summary.reminders, pluginConfig.display.maxFailures));
   }
 
   return {
@@ -218,7 +216,7 @@ function buildStatsAndMetaBlock(summary: NormalizedSummary): SlackBlock {
 function buildFlakyBlock(summary: NormalizedSummary, config: PluginConfig): SlackBlock {
   const { flakyTests } = summary;
 
-  if (flakyTests.length > config.maxFailures) {
+  if (flakyTests.length > config.display.maxFailures) {
     const reportUrl = resolveReportUrl(summary);
     const reportLink = reportUrl
       ? ` <${reportUrl}|View report>`
@@ -230,10 +228,10 @@ function buildFlakyBlock(summary: NormalizedSummary, config: PluginConfig): Slac
   }
 
   const lines = [`*⚠️ Flaky tests (${flakyTests.length})*`, ''];
-  for (const test of flakyTests) {
+  flakyTests.forEach((test, i) => {
     const suite = test.suitePath.length > 0 ? test.suitePath.join(' > ') + ' > ' : '';
-    lines.push(`⟳ ${suite}${test.name} _(retried ${test.retries}x)_`);
-  }
+    lines.push(`${i + 1}. ${suite}${test.name} _(retried ${test.retries}x)_`);
+  });
 
   return {
     type: 'section',
@@ -246,7 +244,7 @@ function buildFailedTestsBlock(
   config: PluginConfig,
 ): SlackBlock {
   const { failedTests } = summary;
-  const maxFailures = config.maxFailures;
+  const maxFailures = config.display.maxFailures;
 
   if (failedTests.length > maxFailures) {
     const reportUrl = resolveReportUrl(summary);
@@ -264,7 +262,8 @@ function buildFailedTestsBlock(
     const ownerSuffix = ownerEntry
       ? ` (${ownerEntry.owner.slack ?? ownerEntry.owner.name})`
       : '';
-    return `${i + 1}. ${t.name}${ownerSuffix}`;
+    const fullName = [...t.suitePath, t.name].filter(Boolean).join(' > ');
+    return `${i + 1}. ${fullName}${ownerSuffix}`;
   });
   return {
     type: 'section',
