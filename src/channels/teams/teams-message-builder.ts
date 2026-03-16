@@ -92,8 +92,9 @@ export function buildTeamsPayload(
   });
 
   // Duration + report link
+  const reportUrl = resolveReportUrl(summary);
   const contextParts = [formatDuration(summary.duration)];
-  if (summary.reportUrl) contextParts.push(`[View report](${summary.reportUrl})`);
+  if (reportUrl) contextParts.push(`[View report](${reportUrl})`);
   body.push({
     type: 'TextBlock',
     text: contextParts.join('  |  '),
@@ -114,34 +115,36 @@ export function buildTeamsPayload(
     });
   }
 
-  // Separator
-  body.push({ type: 'TextBlock', text: '', separator: true });
+  // Separator 1: after header, before stats grid
+  const statsGrid = buildStatsAndMetaGrid(summary);
+  statsGrid.separator = true;
+  statsGrid.spacing = 'Medium';
+  body.push(statsGrid);
 
-  // Issue 2: Stats + Meta (ColumnSet grid replacing FactSet)
-  body.push(buildStatsAndMetaGrid(summary));
+  // Collect bottom sections (failed, flaky, reminders)
+  const bottomSections: CardElement[] = [];
 
-  // Failed tests
   if (isFailed && summary.failedTests.length > 0) {
-    body.push({ type: 'TextBlock', text: '', separator: true });
-    body.push(buildFailedTestsBlock(summary, pluginConfig));
+    bottomSections.push(buildFailedTestsBlock(summary, pluginConfig));
   }
-
-  // Flaky section
   if (pluginConfig.flaky.show && summary.flakyTests.length > 0) {
-    body.push({ type: 'TextBlock', text: '', separator: true });
-    body.push(buildFlakyBlock(summary, pluginConfig));
+    bottomSections.push(buildFlakyBlock(summary, pluginConfig));
+  }
+  if (showReminders && summary.reminders.length >= 2) {
+    bottomSections.push(buildRemindersBlock(summary.reminders, pluginConfig.display.maxFailures));
   }
 
-  // Issue 6: Multiple reminders at bottom
-  if (showReminders && summary.reminders.length >= 2) {
-    body.push({ type: 'TextBlock', text: '', separator: true });
-    body.push(buildRemindersBlock(summary.reminders, pluginConfig.display.maxFailures));
+  // Separator 2: after stats grid, before bottom sections (only if any exist)
+  if (bottomSections.length > 0) {
+    bottomSections[0].separator = true;
+    bottomSections[0].spacing = 'Medium';
+    body.push(...bottomSections);
   }
 
   // Issue 1: Only "View Report" action — removed redundant "View Pipeline" button
   const actions: CardAction[] = [];
-  if (summary.reportUrl) {
-    actions.push({ type: 'Action.OpenUrl', title: 'View Report', url: summary.reportUrl });
+  if (reportUrl) {
+    actions.push({ type: 'Action.OpenUrl', title: 'View Report', url: reportUrl });
   }
 
   const card: AdaptiveCard = {
@@ -233,9 +236,10 @@ function buildStatsAndMetaGrid(summary: NormalizedSummary): CardElement {
 function buildFlakyBlock(summary: NormalizedSummary, config: PluginConfig): CardElement {
   const { flakyTests } = summary;
 
-  // Issue 12: No "View report" link in flaky "too many" message for Teams
   if (flakyTests.length > config.display.maxFailures) {
-    return { type: 'TextBlock', text: `**⚠️ Flaky tests (${flakyTests.length})**\n\nToo many flaky tests to display here 🙄`, wrap: true };
+    const reportUrl = resolveReportUrl(summary);
+    const reportNote = reportUrl ? ` [View report](${reportUrl})` : '';
+    return { type: 'TextBlock', text: `**⚠️ Flaky tests (${flakyTests.length})**\n\nToo many flaky tests to display here 🙄${reportNote}`, wrap: true };
   }
 
   // Issue 13: Numbered list instead of ⟳
@@ -251,7 +255,8 @@ function buildFailedTestsBlock(summary: NormalizedSummary, config: PluginConfig)
   const { failedTests } = summary;
 
   if (failedTests.length > config.display.maxFailures) {
-    const reportNote = summary.reportUrl ? ` [View report](${summary.reportUrl})` : '';
+    const reportUrl = resolveReportUrl(summary);
+    const reportNote = reportUrl ? ` [View report](${reportUrl})` : '';
     return {
       type: 'TextBlock',
       text: `**Failed test cases:**\n\nToo many failures to display here 🙄${reportNote}`,
@@ -284,6 +289,14 @@ function buildRemindersBlock(reminders: SkipReminder[], maxDisplay: number): Car
   if (remaining > 0) lines.push(`_+${remaining} more_`);
 
   return { type: 'TextBlock', text: lines.join('\n\n'), wrap: true };
+}
+
+function resolveReportUrl(summary: NormalizedSummary): string | undefined {
+  if (summary.reportUrl) return summary.reportUrl;
+  if (summary.ci?.runUrl && summary.ci.provider === 'github') {
+    return `${summary.ci.runUrl}#artifacts`;
+  }
+  return summary.ci?.runUrl;
 }
 
 function formatDuration(ms: number): string {

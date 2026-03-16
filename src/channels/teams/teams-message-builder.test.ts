@@ -241,7 +241,7 @@ describe('buildTeamsPayload', () => {
       expect(allText).not.toContain('⟳');
     });
 
-    it('flaky "too many" message has no View report link (Issue 12)', () => {
+    it('flaky "too many" message includes View report link', () => {
       const flakyTests = Array.from({ length: 6 }, (_, i) => ({
         name: `flaky ${i}`, suitePath: [] as string[], fullTitle: `flaky ${i}`, file: 'a.spec.ts', line: i, status: 'flaky' as const, duration: 100, tags: [] as string[], retries: 2,
       }));
@@ -256,12 +256,10 @@ describe('buildTeamsPayload', () => {
 
       expect(allText).toContain('Too many flaky tests');
       expect(allText).toContain('🙄');
-      // Issue 12: The flaky "too many" TextBlock itself should NOT contain "View report"
-      // (the header and ActionSet still have report links — that's expected)
       const flakyBlock = payload.attachments[0].content.body.find(
         (b) => b.text?.includes('Too many flaky tests'),
       );
-      expect(flakyBlock?.text).not.toContain('View report');
+      expect(flakyBlock?.text).toContain('View report');
     });
   });
 
@@ -457,12 +455,24 @@ describe('buildTeamsPayload', () => {
       expect(payload.attachments[0].content.body[0].text).not.toContain('#11359');
     });
 
-    it('handles no report URL', () => {
+    it('handles no report URL — falls back to CI runUrl', () => {
       const summary = baseSummary({ reportUrl: undefined });
       const payload = buildTeamsPayload(summary, defaultTeamsConfig, defaultPluginConfig);
       const allText = JSON.stringify(payload);
 
+      // Should fall back to ci.runUrl#artifacts for GitHub
+      expect(allText).toContain('View report');
+      expect(allText).toContain('View Report');
+      expect(allText).toContain('github.com/org/repo/actions/runs/11359#artifacts');
+    });
+
+    it('handles no report URL and no CI context', () => {
+      const summary = baseSummary({ reportUrl: undefined, ci: undefined });
+      const payload = buildTeamsPayload(summary, defaultTeamsConfig, defaultPluginConfig);
+      const allText = JSON.stringify(payload);
+
       expect(allText).not.toContain('View Report');
+      expect(allText).not.toContain('View report');
     });
 
     it('handles no meta entries', () => {

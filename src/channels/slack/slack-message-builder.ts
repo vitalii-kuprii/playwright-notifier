@@ -83,26 +83,29 @@ export function buildSlackPayload(
     });
   }
 
-  // Divider
+  // Separator 1: after header, before stats grid
   blocks.push({ type: 'divider' });
 
   // Stats + Meta combined (single block, 2-column grid)
   blocks.push(buildStatsAndMetaBlock(summary));
 
-  // Failed test cases (only on failure)
+  // Collect bottom sections (failed, flaky, reminders)
+  const bottomSections: SlackBlock[] = [];
+
   if (isFailed && summary.failedTests.length > 0) {
-    blocks.push({ type: 'divider' });
-    blocks.push(buildFailedTestsBlock(summary, pluginConfig));
+    bottomSections.push(buildFailedTestsBlock(summary, pluginConfig));
   }
-
-  // Flaky section (if enabled and present)
   if (pluginConfig.flaky.show && summary.flakyTests.length > 0) {
-    blocks.push(buildFlakyBlock(summary, pluginConfig));
+    bottomSections.push(buildFlakyBlock(summary, pluginConfig));
+  }
+  if (showReminders && summary.reminders.length >= 2) {
+    bottomSections.push(buildReminderSection(summary.reminders, pluginConfig.display.maxFailures));
   }
 
-  // Multiple reminders: section block at bottom
-  if (showReminders && summary.reminders.length >= 2) {
-    blocks.push(buildReminderSection(summary.reminders, pluginConfig.display.maxFailures));
+  // Separator 2: after stats grid, before bottom sections (only if any exist)
+  if (bottomSections.length > 0) {
+    blocks.push({ type: 'divider' });
+    blocks.push(...bottomSections);
   }
 
   return {
