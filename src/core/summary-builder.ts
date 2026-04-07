@@ -158,7 +158,7 @@ export class SummaryBuilder {
 function mapStatus(test: TestCase, result: PwTestResult): TestResult['status'] {
   if (result.status === 'skipped') return 'skipped';
   if (result.status === 'interrupted') return 'skipped';
-  if (result.status === 'timedout') return 'failed';
+  if (result.status === 'timedOut') return 'failed';
   if (test.outcome() === 'flaky') return 'flaky';
   if (test.outcome() === 'unexpected') return 'failed';
   return 'passed';

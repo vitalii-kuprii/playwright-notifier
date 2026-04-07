@@ -134,7 +134,7 @@ describe('SummaryBuilder', () => {
       ...Object.values(
         createMockTest({
           title: 'timedout test',
-          status: 'timedout',
+          status: 'timedOut',
           outcome: 'unexpected',
           errors: [{ message: 'Timeout 30000ms exceeded' }],
         }),
