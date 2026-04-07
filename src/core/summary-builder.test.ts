@@ -105,6 +105,63 @@ describe('SummaryBuilder', () => {
     expect(summary.flakyTests[0].retries).toBe(1);
   });
 
+  it('maps interrupted tests to skipped', () => {
+    const builder = createBuilder();
+    builder.onBegin();
+
+    builder.addTestResult(
+      ...Object.values(
+        createMockTest({
+          title: 'interrupted test',
+          status: 'interrupted',
+          outcome: 'unexpected',
+        }),
+      ),
+    );
+
+    const summary = builder.build(createFullResult({ status: 'interrupted' }));
+
+    expect(summary.stats.skipped).toBe(1);
+    expect(summary.skippedTests).toHaveLength(1);
+    expect(summary.runStatus).toBe('interrupted');
+  });
+
+  it('maps timedout tests to failed', () => {
+    const builder = createBuilder();
+    builder.onBegin();
+
+    builder.addTestResult(
+      ...Object.values(
+        createMockTest({
+          title: 'timedout test',
+          status: 'timedout',
+          outcome: 'unexpected',
+          errors: [{ message: 'Timeout 30000ms exceeded' }],
+        }),
+      ),
+    );
+
+    const summary = builder.build(createFullResult({ status: 'timedout' }));
+
+    expect(summary.status).toBe('failed');
+    expect(summary.stats.failed).toBe(1);
+    expect(summary.failedTests).toHaveLength(1);
+    expect(summary.runStatus).toBe('timedout');
+  });
+
+  it('includes runStatus from FullResult', () => {
+    const builder = createBuilder();
+    builder.onBegin();
+
+    const summary = builder.build(createFullResult({ status: 'passed' }));
+    expect(summary.runStatus).toBe('passed');
+
+    const builder2 = createBuilder();
+    builder2.onBegin();
+    const summary2 = builder2.build(createFullResult({ status: 'failed' }));
+    expect(summary2.runStatus).toBe('failed');
+  });
+
   it('handles skipped tests', () => {
     const builder = createBuilder();
     builder.onBegin();

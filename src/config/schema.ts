@@ -124,6 +124,7 @@ function migrateConfig(input: unknown): unknown {
 
 export const pluginConfigSchema = z.preprocess(migrateConfig, z.object({
   sendResults: z.enum(['always', 'on-failure', 'off']).default('always'),
+  sendOnInterrupted: z.boolean().default(false),
   ciOnly: z.boolean().default(true),
   projectName: z.string().optional(),
   environment: z.string().default('default'),

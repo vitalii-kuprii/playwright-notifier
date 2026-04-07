@@ -54,10 +54,12 @@ export function buildTeamsPayload(
 ): TeamsPayload {
   const isFailed = summary.status === 'failed';
   const isFlaky = summary.status === 'flaky';
+  const isInterrupted = summary.runStatus === 'interrupted';
+  const isTimedOut = summary.runStatus === 'timedout';
 
-  const statusEmoji = isFailed ? '❌' : '✅';
-  const statusText = isFailed ? 'failed' : 'passed';
-  const statusColor = isFailed ? 'attention' : (isFlaky && pluginConfig.flaky.show) ? 'warning' : 'good';
+  const statusEmoji = (isFailed || isInterrupted || isTimedOut) ? '❌' : '✅';
+  const statusText = isInterrupted ? 'was cancelled' : isTimedOut ? 'timed out' : isFailed ? 'failed' : 'passed';
+  const statusColor = (isFailed || isInterrupted || isTimedOut) ? 'attention' : (isFlaky && pluginConfig.flaky.show) ? 'warning' : 'good';
 
   const body: CardElement[] = [];
 

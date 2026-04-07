@@ -23,6 +23,9 @@ export interface NormalizedSummary {
   branch?: string;
   status: 'passed' | 'failed' | 'flaky';
 
+  // Run-level status from Playwright's FullResult (passed, failed, interrupted, timedout)
+  runStatus: 'passed' | 'failed' | 'interrupted' | 'timedout';
+
   stats: {
     passed: number;
     failed: number;

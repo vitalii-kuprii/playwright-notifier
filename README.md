@@ -75,6 +75,7 @@ All options are optional and have sensible defaults.
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `sendResults` | `'always'` \| `'on-failure'` \| `'off'` | `'always'` | When to send notifications |
+| `sendOnInterrupted` | `boolean` | `false` | Send notifications when pipeline is cancelled/interrupted |
 | `ciOnly` | `boolean` | `true` | Only send notifications in CI environments |
 | `projectName` | `string` | — | Display name for the project |
 | `environment` | `string` | `'default'` | Environment label (auto-detected from baseURL) |
@@ -164,6 +165,7 @@ When `onFailure: false` (default), triggered-by is always shown regardless of st
 ```ts
 ['playwright-notifier', {
   sendResults: 'always',
+  sendOnInterrupted: false, // skip notifications when pipeline is cancelled
   ciOnly: true,
   projectName: 'My App E2E',
   environment: 'staging',
@@ -440,6 +442,25 @@ Supported CI providers:
 By default, `ciOnly` is `true` — notifications are suppressed when running tests locally. The reporter detects CI via standard environment variables (`CI`, `GITHUB_ACTIONS`, `GITLAB_CI`, `TF_BUILD`).
 
 Set `ciOnly: false` to send notifications from local runs as well.
+
+## Interrupted & Timed Out Runs
+
+Playwright's `onEnd` receives a run-level status that can be `passed`, `failed`, `interrupted`, or `timedout`. The reporter handles these correctly:
+
+| Run Status | Default Behavior | Header Example |
+|------------|-----------------|----------------|
+| `passed` | Send notification | `✅ Pipeline #12345 passed for PR #42` |
+| `failed` | Send notification | `❌ Pipeline #12345 failed for PR #42` |
+| `interrupted` | **Skip notification** | `❌ Pipeline #12345 was cancelled for PR #42` |
+| `timedout` | Send notification (as failure) | `❌ Pipeline #12345 timed out for PR #42` |
+
+**Interrupted runs** (e.g. cancelled CI pipelines) are silently skipped by default — the results are incomplete and would be misleading. To receive notifications for cancelled runs, set `sendOnInterrupted: true`.
+
+**Timed out runs** are always reported because they indicate a real problem (global timeout exceeded). The notification header shows "timed out" instead of "failed".
+
+At the individual test level:
+- Tests that were **interrupted** (running when pipeline was cancelled) are counted as **skipped**
+- Tests that **timed out** are counted as **failed**
 
 ## Skip Reminders
 

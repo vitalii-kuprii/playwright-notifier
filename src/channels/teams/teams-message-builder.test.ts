@@ -8,6 +8,7 @@ function baseSummary(overrides?: Partial<NormalizedSummary>): NormalizedSummary 
     projectName: 'MyApp E2E',
     environment: 'staging',
     status: 'passed',
+    runStatus: 'passed',
     stats: { passed: 50, failed: 0, skipped: 2, flaky: 0, total: 52 },
     duration: 154_000,
     startedAt: new Date('2026-03-06T10:00:00Z'),
@@ -442,6 +443,68 @@ describe('buildTeamsPayload', () => {
       const payload = buildTeamsPayload(summary, defaultTeamsConfig, defaultPluginConfig);
       const header = payload.attachments[0].content.body[0];
       expect(header.text).toMatch(/MyApp E2E pipeline.*#555.*passed for.*MR !99/);
+    });
+  });
+
+  describe('interrupted/timedout runs', () => {
+    it('shows "was cancelled" header when run is interrupted', () => {
+      const summary = baseSummary({ status: 'passed', runStatus: 'interrupted' });
+      const payload = buildTeamsPayload(summary, defaultTeamsConfig, defaultPluginConfig);
+      const header = payload.attachments[0].content.body[0];
+
+      expect(header.text).toContain('❌');
+      expect(header.text).toContain('was cancelled');
+      expect(header.color).toBe('attention');
+    });
+
+    it('shows "was cancelled" with PR link when run is interrupted', () => {
+      const summary = baseSummary({
+        status: 'passed',
+        runStatus: 'interrupted',
+        ci: {
+          provider: 'github',
+          branch: 'feature/login',
+          runId: '24078326715',
+          runUrl: 'https://github.com/org/repo/actions/runs/24078326715',
+          pullRequestNumber: '1155',
+          pullRequestUrl: 'https://github.com/org/repo/pull/1155',
+          actor: 'vkuprii',
+        },
+      });
+      const payload = buildTeamsPayload(summary, defaultTeamsConfig, defaultPluginConfig);
+      const header = payload.attachments[0].content.body[0];
+
+      expect(header.text).toMatch(/❌.*pipeline.*#24078326715.*was cancelled for.*PR #1155/);
+    });
+
+    it('shows "timed out" header when run times out', () => {
+      const summary = baseSummary({ status: 'failed', runStatus: 'timedout' });
+      const payload = buildTeamsPayload(summary, defaultTeamsConfig, defaultPluginConfig);
+      const header = payload.attachments[0].content.body[0];
+
+      expect(header.text).toContain('❌');
+      expect(header.text).toContain('timed out');
+      expect(header.color).toBe('attention');
+    });
+
+    it('shows "timed out" with PR link when run times out', () => {
+      const summary = baseSummary({
+        status: 'failed',
+        runStatus: 'timedout',
+        ci: {
+          provider: 'github',
+          branch: 'feature/login',
+          runId: '24078326715',
+          runUrl: 'https://github.com/org/repo/actions/runs/24078326715',
+          pullRequestNumber: '1155',
+          pullRequestUrl: 'https://github.com/org/repo/pull/1155',
+          actor: 'vkuprii',
+        },
+      });
+      const payload = buildTeamsPayload(summary, defaultTeamsConfig, defaultPluginConfig);
+      const header = payload.attachments[0].content.body[0];
+
+      expect(header.text).toMatch(/❌.*pipeline.*#24078326715.*timed out for.*PR #1155/);
     });
   });
 

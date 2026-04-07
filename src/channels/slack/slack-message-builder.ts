@@ -37,10 +37,12 @@ export function buildSlackPayload(
 ): SlackPayload {
   const isFailed = summary.status === 'failed';
   const isFlaky = summary.status === 'flaky';
+  const isInterrupted = summary.runStatus === 'interrupted';
+  const isTimedOut = summary.runStatus === 'timedout';
 
-  const statusEmoji = isFailed ? '❌' : '✅';
-  const statusText = isFailed ? 'failed' : 'passed';
-  const color = isFailed ? '#e01e5a' : (isFlaky && pluginConfig.flaky.show) ? '#f2c744' : '#36a64f';
+  const statusEmoji = (isFailed || isInterrupted || isTimedOut) ? '❌' : '✅';
+  const statusText = isInterrupted ? 'was cancelled' : isTimedOut ? 'timed out' : isFailed ? 'failed' : 'passed';
+  const color = (isFailed || isInterrupted || isTimedOut) ? '#e01e5a' : (isFlaky && pluginConfig.flaky.show) ? '#f2c744' : '#36a64f';
 
   const runLink = buildRunLink(summary);
   const prLink = buildPRLink(summary);
@@ -111,7 +113,7 @@ export function buildSlackPayload(
   return {
     attachments: [{
       color,
-      fallback: `${statusEmoji} ${summary.projectName ? `${summary.projectName} pipeline` : 'Pipeline'} ${statusText}`,
+      fallback: `${statusEmoji} ${projectPrefix} ${statusText}`,
       blocks,
     }],
   };

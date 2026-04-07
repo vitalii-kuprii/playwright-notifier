@@ -15,6 +15,7 @@ function baseSummary(overrides?: Partial<NormalizedSummary>): NormalizedSummary 
     projectName: 'MyApp E2E',
     environment: 'staging',
     status: 'passed',
+    runStatus: 'passed',
     stats: { passed: 50, failed: 0, skipped: 2, flaky: 0, total: 52 },
     duration: 154_000,
     startedAt: new Date('2026-03-06T10:00:00Z'),
@@ -357,6 +358,44 @@ describe('buildEmailContent', () => {
       const { html } = buildEmailContent(summary, config);
       expect(html).toContain('MR !99');
       expect(html).toContain('href="https://gitlab.com/org/repo/-/merge_requests/99"');
+    });
+  });
+
+  describe('interrupted/timedout runs', () => {
+    it('shows "was cancelled" in header when run is interrupted', () => {
+      const summary = baseSummary({ status: 'passed', runStatus: 'interrupted' });
+      const config = makePluginConfig();
+      const { html } = buildEmailContent(summary, config);
+
+      expect(html).toContain('❌');
+      expect(html).toContain('was cancelled');
+      expect(html).toContain('#e01e5a');
+    });
+
+    it('shows "timed out" in header when run times out', () => {
+      const summary = baseSummary({ status: 'failed', runStatus: 'timedout' });
+      const config = makePluginConfig();
+      const { html } = buildEmailContent(summary, config);
+
+      expect(html).toContain('❌');
+      expect(html).toContain('timed out');
+      expect(html).toContain('#e01e5a');
+    });
+
+    it('uses "cancelled" in subject when run is interrupted', () => {
+      const result = interpolateSubject(
+        '[{{status}}] {{projectName}}',
+        baseSummary({ status: 'passed', runStatus: 'interrupted' }),
+      );
+      expect(result).toBe('[cancelled] MyApp E2E');
+    });
+
+    it('uses "timed out" in subject when run times out', () => {
+      const result = interpolateSubject(
+        '[{{status}}] {{projectName}}',
+        baseSummary({ status: 'failed', runStatus: 'timedout' }),
+      );
+      expect(result).toBe('[timed out] MyApp E2E');
     });
   });
 

@@ -32,6 +32,8 @@ export class PlaywrightNotifyReporter implements Reporter {
   async onEnd(result: FullResult): Promise<void> {
     if (this.config.ciOnly && !process.env.CI) return;
 
+    if (result.status === 'interrupted' && !this.config.sendOnInterrupted) return;
+
     const summary = this.summaryBuilder.build(result);
 
     if (this.config.sendResults === 'off') return;

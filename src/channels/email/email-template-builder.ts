@@ -32,7 +32,7 @@ export function interpolateSubject(
 ): string {
   const vars: Record<string, string> = {
     projectName: summary.projectName ?? '',
-    status: summary.status,
+    status: summary.runStatus === 'interrupted' ? 'cancelled' : summary.runStatus === 'timedout' ? 'timed out' : summary.status,
     passed: String(summary.stats.passed),
     failed: String(summary.stats.failed),
     skipped: String(summary.stats.skipped),
@@ -47,9 +47,11 @@ export function interpolateSubject(
 function buildHtmlBody(summary: NormalizedSummary, pluginConfig: PluginConfig): string {
   const isFailed = summary.status === 'failed';
   const isFlaky = summary.status === 'flaky';
-  const statusColor = (isFlaky && pluginConfig.flaky.show) ? COLORS.flaky : isFailed ? COLORS.failed : COLORS.passed;
-  const statusEmoji = isFailed ? '❌' : '✅';
-  const statusText = isFailed ? 'failed' : 'passed';
+  const isInterrupted = summary.runStatus === 'interrupted';
+  const isTimedOut = summary.runStatus === 'timedout';
+  const statusColor = (isFailed || isInterrupted || isTimedOut) ? COLORS.failed : (isFlaky && pluginConfig.flaky.show) ? COLORS.flaky : COLORS.passed;
+  const statusEmoji = (isFailed || isInterrupted || isTimedOut) ? '❌' : '✅';
+  const statusText = isInterrupted ? 'was cancelled' : isTimedOut ? 'timed out' : isFailed ? 'failed' : 'passed';
 
   const sections: string[] = [];
 

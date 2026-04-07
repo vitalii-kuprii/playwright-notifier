@@ -132,6 +132,7 @@ export class SummaryBuilder {
       environment,
       branch,
       status,
+      runStatus: fullResult.status as NormalizedSummary['runStatus'],
       stats,
       duration: fullResult.duration,
       startedAt: this.startedAt,
@@ -156,6 +157,8 @@ export class SummaryBuilder {
 
 function mapStatus(test: TestCase, result: PwTestResult): TestResult['status'] {
   if (result.status === 'skipped') return 'skipped';
+  if (result.status === 'interrupted') return 'skipped';
+  if (result.status === 'timedout') return 'failed';
   if (test.outcome() === 'flaky') return 'flaky';
   if (test.outcome() === 'unexpected') return 'failed';
   return 'passed';

@@ -8,6 +8,7 @@ function baseSummary(overrides?: Partial<NormalizedSummary>): NormalizedSummary 
     projectName: 'Test',
     environment: 'staging',
     status: 'passed',
+    runStatus: 'passed',
     stats: { passed: 10, failed: 0, skipped: 0, flaky: 0, total: 10 },
     duration: 10_000,
     startedAt: new Date(),
