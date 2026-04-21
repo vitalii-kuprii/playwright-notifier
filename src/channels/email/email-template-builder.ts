@@ -78,6 +78,15 @@ function buildHtmlBody(summary: NormalizedSummary, pluginConfig: PluginConfig): 
     </div>
   `);
 
+  // Shard warning
+  if (summary.shards) {
+    sections.push(`
+    <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:4px;padding:8px 12px;margin-bottom:16px;color:#856404;">
+      ⚠️ <strong>Warning:</strong> only ${summary.shards.actual} of ${summary.shards.expected} shards reported — results are incomplete
+    </div>
+    `);
+  }
+
   // Stats table
   sections.push(buildStatsTable(summary));
 

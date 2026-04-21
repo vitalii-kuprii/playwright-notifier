@@ -11,6 +11,7 @@ Designed for CI pipelines — add it to your Playwright config and get instant n
 - **Skip reminders** — tag skipped tests with `@remind(YYYY-MM-DD)` and get notified when they're overdue
 - **On-call rotation** — rotate who gets mentioned on failures (daily, weekly, or biweekly)
 - **Environment detection** — auto-detects `staging`, `dev`, `production` from your base URL
+- **Shard validation** — detects missing shards in merged reports and prevents misleading "Success" notifications
 - **Configurable** — control what gets shown, how many failures to list, and who gets pinged
 
 ## Screenshots
@@ -80,6 +81,7 @@ All options are optional and have sensible defaults.
 | `projectName` | `string` | — | Display name for the project |
 | `environment` | `string` | `'default'` | Environment label (auto-detected from baseURL) |
 | `branch` | `string` | — | Override branch name (auto-detected in CI) |
+| `expectedShards` | `number` | — | Expected number of shards — detects missing shards in merged reports |
 | `meta` | `{ key, value }[]` | `[]` | Extra key-value metadata to include |
 
 ### Display Options
@@ -169,6 +171,7 @@ When `onFailure: false` (default), triggered-by is always shown regardless of st
   ciOnly: true,
   projectName: 'My App E2E',
   environment: 'staging',
+  expectedShards: 4, // warn if fewer than 4 shards report results
 
   display: {
     maxFailures: 5,
@@ -461,6 +464,30 @@ Playwright's `onEnd` receives a run-level status that can be `passed`, `failed`,
 At the individual test level:
 - Tests that were **interrupted** (running when pipeline was cancelled) are counted as **skipped**
 - Tests that **timed out** are counted as **failed**
+
+## Missing Shard Detection
+
+When using [Playwright sharding](https://playwright.dev/docs/test-sharding) in CI, a shard can crash before running any tests (infra failure, OOM, etc.) and never upload a blob report. When `merge-reports` runs, it only sees reports from the shards that succeeded — so the reporter would send a misleading "Success" notification.
+
+Set `expectedShards` to detect this:
+
+```ts
+['playwright-notifier', {
+  expectedShards: 4,
+  channels: {
+    slack: { webhookUrl: '...' },
+  },
+}]
+```
+
+When the actual shard count in the merged report is lower than expected:
+- The notification status is forced to **failed** (even if all reported tests passed)
+- A warning line is appended: `Warning: only 3 of 4 shards reported — results are incomplete`
+- `mentionOnFailure` and on-call rotation triggers as it would for any failure
+
+When `expectedShards` is not set, behavior is unchanged (backwards compatible).
+
+The actual shard count is detected from Playwright's merged report metadata — when `merge-reports` runs, each shard contributes separate project entries with the same name, so the reporter counts how many instances exist.
 
 ## Skip Reminders
 

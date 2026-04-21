@@ -217,6 +217,25 @@ describe('pluginConfigSchema', () => {
     ).toThrow();
   });
 
+  it('accepts expectedShards as positive integer', () => {
+    const result = pluginConfigSchema.parse({ expectedShards: 4 });
+    expect(result.expectedShards).toBe(4);
+  });
+
+  it('defaults expectedShards to undefined', () => {
+    const result = pluginConfigSchema.parse({});
+    expect(result.expectedShards).toBeUndefined();
+  });
+
+  it('rejects expectedShards as 0 or negative', () => {
+    expect(() => pluginConfigSchema.parse({ expectedShards: 0 })).toThrow();
+    expect(() => pluginConfigSchema.parse({ expectedShards: -1 })).toThrow();
+  });
+
+  it('rejects expectedShards as non-integer', () => {
+    expect(() => pluginConfigSchema.parse({ expectedShards: 2.5 })).toThrow();
+  });
+
   it('parses webhook config', () => {
     const result = pluginConfigSchema.parse({
       channels: {

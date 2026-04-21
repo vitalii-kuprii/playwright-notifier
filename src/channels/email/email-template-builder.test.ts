@@ -442,4 +442,26 @@ describe('buildEmailContent', () => {
       expect(html).toContain('&lt;script&gt;');
     });
   });
+
+  describe('missing shards warning', () => {
+    it('shows shard warning when shards are missing', () => {
+      const summary = baseSummary({
+        status: 'failed',
+        shards: { actual: 3, expected: 4 },
+      });
+      const config = makePluginConfig();
+      const { html } = buildEmailContent(summary, config);
+
+      expect(html).toContain('only 3 of 4 shards reported');
+      expect(html).toContain('results are incomplete');
+    });
+
+    it('does not show shard warning when shards field is absent', () => {
+      const summary = baseSummary();
+      const config = makePluginConfig();
+      const { html } = buildEmailContent(summary, config);
+
+      expect(html).not.toContain('shards reported');
+    });
+  });
 });

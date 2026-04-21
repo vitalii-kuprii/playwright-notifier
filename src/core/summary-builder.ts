@@ -19,6 +19,7 @@ export class SummaryBuilder {
   private startedAt: Date = new Date();
   private config: PluginConfig;
   private baseURL: string | undefined;
+  private actualShards: number | undefined;
 
   constructor(config: PluginConfig) {
     this.config = config;
@@ -28,6 +29,7 @@ export class SummaryBuilder {
     this.startedAt = new Date();
     this.tests = [];
     this.baseURL = playwrightConfig?.projects?.[0]?.use?.baseURL;
+    this.actualShards = detectActualShards(playwrightConfig);
   }
 
   addTestResult(test: TestCase, result: PwTestResult): void {
@@ -75,6 +77,16 @@ export class SummaryBuilder {
     let status: NormalizedSummary['status'] = 'passed';
     if (stats.failed > 0) status = 'failed';
     else if (stats.flaky > 0) status = 'flaky';
+
+    // Shard validation: detect missing shards
+    const expectedShards = this.config.expectedShards;
+    const shards = expectedShards && this.actualShards !== undefined && this.actualShards < expectedShards
+      ? { actual: this.actualShards, expected: expectedShards }
+      : undefined;
+
+    if (shards) {
+      status = 'failed';
+    }
 
     const ci = detectCIContext();
     const branch = detectBranch(this.config.branch, ci);
@@ -146,6 +158,7 @@ export class SummaryBuilder {
       reminders,
       owners,
       onCall,
+      shards,
       meta: meta.filter((m) => m.value !== undefined),
       ci,
       reportUrl: this.config.display.reportUrl,
@@ -198,6 +211,26 @@ function truncateError(error: string | undefined, maxLength: number): string | u
 
   if (firstLine.length <= maxLength) return firstLine;
   return firstLine.slice(0, maxLength - 3) + '...';
+}
+
+/**
+ * Detect actual shard count from merged report projects.
+ * When merge-reports runs, each shard contributes a separate project entry
+ * with the same name, so the max frequency of any project name = shard count.
+ */
+function detectActualShards(config?: FullConfig): number | undefined {
+  const projects = config?.projects;
+  if (!projects || projects.length === 0) return undefined;
+
+  const nameCounts = new Map<string, number>();
+  for (const project of projects) {
+    const name = project.name;
+    nameCounts.set(name, (nameCounts.get(name) ?? 0) + 1);
+  }
+
+  const maxCount = Math.max(...nameCounts.values());
+  // Only meaningful for merged reports (>1 instance of same project name)
+  return maxCount > 1 ? maxCount : undefined;
 }
 
 /**

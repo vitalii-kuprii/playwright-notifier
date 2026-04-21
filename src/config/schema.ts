@@ -166,6 +166,9 @@ export const pluginConfigSchema = z.preprocess(migrateConfig, z.object({
     }),
   ]).default(false),
 
+  // Shard validation: detect missing shards in merged reports
+  expectedShards: z.number().int().positive().optional(),
+
   // On-call rotation
   rotation: rotationConfigSchema.optional(),
 }));

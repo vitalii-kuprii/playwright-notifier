@@ -104,6 +104,17 @@ export function buildTeamsPayload(
     wrap: true,
   });
 
+  // Shard warning
+  if (summary.shards) {
+    body.push({
+      type: 'TextBlock',
+      text: `⚠️ **Warning:** only ${summary.shards.actual} of ${summary.shards.expected} shards reported — results are incomplete`,
+      spacing: 'Small',
+      wrap: true,
+      color: 'attention',
+    });
+  }
+
   // Issue 6: Single reminder inline (after duration, before separator)
   const showReminders = pluginConfig.reminders.show && summary.reminders?.length > 0;
   if (showReminders && summary.reminders.length === 1) {

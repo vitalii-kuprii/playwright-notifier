@@ -545,4 +545,26 @@ describe('buildTeamsPayload', () => {
       expect(payload.attachments).toHaveLength(1);
     });
   });
+
+  describe('missing shards warning', () => {
+    it('shows shard warning when shards are missing', () => {
+      const summary = baseSummary({
+        status: 'failed',
+        shards: { actual: 3, expected: 4 },
+      });
+      const payload = buildTeamsPayload(summary, defaultTeamsConfig, defaultPluginConfig);
+
+      const allText = JSON.stringify(payload);
+      expect(allText).toContain('only 3 of 4 shards reported');
+      expect(allText).toContain('results are incomplete');
+    });
+
+    it('does not show shard warning when shards field is absent', () => {
+      const summary = baseSummary();
+      const payload = buildTeamsPayload(summary, defaultTeamsConfig, defaultPluginConfig);
+
+      const allText = JSON.stringify(payload);
+      expect(allText).not.toContain('shards reported');
+    });
+  });
 });

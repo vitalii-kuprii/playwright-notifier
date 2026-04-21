@@ -73,6 +73,14 @@ export function buildSlackPayload(
     text: mrkdwn(headerBody),
   });
 
+  // Shard warning
+  if (summary.shards) {
+    blocks.push({
+      type: 'context',
+      elements: [mrkdwn(`:warning: *Warning:* only ${summary.shards.actual} of ${summary.shards.expected} shards reported — results are incomplete`)],
+    });
+  }
+
   // Single reminder: context block after header, before divider
   const showReminders = pluginConfig.reminders.show
     && !options?.excludeReminders

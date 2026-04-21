@@ -59,6 +59,12 @@ export interface NormalizedSummary {
   owners: OwnershipEntry[];
   onCall?: ResolvedOwner;
 
+  // Shard validation
+  shards?: {
+    actual: number;
+    expected: number;
+  };
+
   // Report link
   reportUrl?: string;
 }
