@@ -3,6 +3,7 @@ import type { PluginConfig } from '../config/schema';
 import type { BaseChannel } from './base-channel';
 import { SlackChannel } from './slack/slack-channel';
 import { TeamsChannel } from './teams/teams-channel';
+import { DiscordChannel } from './discord/discord-channel';
 import { EmailChannel } from './email/email-channel';
 
 type SendResults = 'always' | 'on-failure' | 'off';
@@ -29,6 +30,13 @@ export class ChannelManager {
       this.entries.push({
         channel: new TeamsChannel(config.channels.teams, config),
         sendResults: config.channels.teams.sendResults ?? globalSendResults,
+      });
+    }
+
+    if (config.channels.discord) {
+      this.entries.push({
+        channel: new DiscordChannel(config.channels.discord, config),
+        sendResults: config.channels.discord.sendResults ?? globalSendResults,
       });
     }
 

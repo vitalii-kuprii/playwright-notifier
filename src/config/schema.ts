@@ -27,6 +27,14 @@ const teamsChannelSchema = z.object({
   sendResults: z.enum(['always', 'on-failure', 'off']).optional(),
 });
 
+const discordChannelSchema = z.object({
+  webhookUrl: z.string().url(),
+  username: z.string().optional(),
+  avatarUrl: z.string().url().optional(),
+  mentionOnFailure: z.array(z.string()).default([]),
+  sendResults: z.enum(['always', 'on-failure', 'off']).optional(),
+});
+
 const emailSmtpSchema = z.object({
   host: z.string(),
   port: z.number().default(587),
@@ -134,6 +142,7 @@ export const pluginConfigSchema = z.preprocess(migrateConfig, z.object({
     slack: slackChannelSchema.optional(),
     webhook: webhookChannelSchema.optional(),
     teams: teamsChannelSchema.optional(),
+    discord: discordChannelSchema.optional(),
     email: emailChannelSchema.optional(),
   }).default({}),
 
@@ -178,4 +187,5 @@ export type SlackChannelConfig = z.infer<typeof slackChannelSchema>;
 export type WebhookChannelConfig = z.infer<typeof webhookChannelSchema>;
 export type TeamsChannelConfig = z.infer<typeof teamsChannelSchema>;
 export type EmailChannelConfig = z.infer<typeof emailChannelSchema>;
+export type DiscordChannelConfig = z.infer<typeof discordChannelSchema>;
 export type RotationConfig = z.infer<typeof rotationConfigSchema>;
